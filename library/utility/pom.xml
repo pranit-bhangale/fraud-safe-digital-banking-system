@@ -22,7 +22,7 @@
         <spring-boot.version>4.1.2</spring-boot.version>
         <aspectj.version>1.9.25.1</aspectj.version>
         <jspecify.version>1.0.1</jspecify.version>
-        <lombok.version>1.18.36</lombok.version>
+        <lombok.version>1.18.42</lombok.version>
         <junit-jupiter.version>5.11.4</junit-jupiter.version>
         <mockito.version>5.23.0</mockito.version>
     </properties>
