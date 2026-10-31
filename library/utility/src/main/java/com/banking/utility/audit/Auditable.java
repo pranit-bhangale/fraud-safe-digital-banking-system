@@ -4,8 +4,11 @@ import jakarta.persistence.Column;
 import jakarta.persistence.EntityListeners;
 import jakarta.persistence.MappedSuperclass;
 import jakarta.persistence.Version;
+import lombok.Builder;
 import lombok.Getter;
+import lombok.NoArgsConstructor;
 import lombok.Setter;
+import lombok.experimental.SuperBuilder;
 import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedBy;
@@ -20,6 +23,8 @@ import java.util.UUID;
  */
 @Setter
 @Getter
+@NoArgsConstructor
+@SuperBuilder
 @MappedSuperclass
 @EntityListeners(AuditingEntityListener.class)
 public abstract class Auditable {
@@ -42,13 +47,6 @@ public abstract class Auditable {
 
     @Version
     @Column(name = "version", nullable = false)
+    @Builder.Default
     private Long version = 0L;
-
-    /**
-     * Protected default constructor for JPA entity subclasses.
-     * Initializes the entity version to {@code 0L}.
-     */
-    protected Auditable() {
-        this.version = 0L;
-    }
 }
