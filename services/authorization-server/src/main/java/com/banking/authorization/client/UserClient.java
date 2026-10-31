@@ -14,6 +14,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 )
 public interface UserClient {
 
-    @GetMapping("/internal/by-username/{username}")
+    @GetMapping(value = "/internal/by-username/{username}", version = "v1")
     UserAuthResponse getUserByUsername(@PathVariable("username") String username);
 }

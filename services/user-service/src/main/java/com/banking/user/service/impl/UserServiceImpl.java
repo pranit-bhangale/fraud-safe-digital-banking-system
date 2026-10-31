@@ -1,5 +1,6 @@
 package com.banking.user.service.impl;
 
+import com.banking.user.dto.UserAuthResponse;
 import com.banking.user.dto.UserRequest;
 import com.banking.user.entity.Role;
 import com.banking.user.entity.User;
@@ -8,6 +9,7 @@ import com.banking.user.repository.UserRepository;
 import com.banking.user.service.UserService;
 import com.banking.utility.annotation.LogExecution;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -35,5 +37,19 @@ public class UserServiceImpl implements UserService {
                 .role(Role.USER)
                 .build();
         this.userRepository.save(user);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, readOnly = true)
+    public UserAuthResponse getUserDataByUsername(final String username) {
+        final User user = this.userRepository.findByUsername(username)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found"));
+        return UserAuthResponse.builder()
+                .id(user.getId())
+                .username(user.getUsername())
+                .password(user.getPassword())
+                .enabled(user.isEnabled())
+                .role(String.valueOf(user.getRole()))
+                .build();
     }
 }
