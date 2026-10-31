@@ -18,6 +18,19 @@ public class LoggingAspect {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(LoggingAspect.class);
 
+    /**
+     * Default constructor for {@link LoggingAspect}.
+     */
+    public LoggingAspect() {
+    }
+
+    /**
+     * Intercepts and logs the execution duration of methods annotated with {@link LogExecution}.
+     *
+     * @param joinPoint the proceeding join point representing the intercepted method
+     * @return the result of the method execution
+     * @throws Throwable if the underlying intercepted method throws an exception
+     */
     @Around("@annotation(com.banking.utility.annotation.LogExecution)")
     public Object logMethodExecution(final ProceedingJoinPoint joinPoint) throws Throwable {
         final String methodName = joinPoint.getSignature().toShortString();

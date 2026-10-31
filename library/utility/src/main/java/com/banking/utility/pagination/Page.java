@@ -23,8 +23,19 @@ import java.util.function.Function;
  */
 public final class Page {
 
+    /**
+     * Default number of elements per page when unpaged or unspecified.
+     */
     public static final int DEFAULT_PAGE_SIZE = 10;
+
+    /**
+     * Minimum allowed number of elements per page.
+     */
     public static final int MIN_PAGE_SIZE = 1;
+
+    /**
+     * Maximum allowed number of elements per page.
+     */
     public static final int MAX_PAGE_SIZE = 100;
 
     private Page() {
@@ -33,6 +44,12 @@ public final class Page {
 
     /**
      * Retrieves a page using a Spring Data Pageable without content mapping.
+     *
+     * @param <E>                   the entity type
+     * @param repository            the Spring Data JPA repository
+     * @param pageable              the pagination request; defaults to page 0 with size 10 if null/unpaged
+     * @param allowedSortProperties whitelist of allowed entity property names for sorting
+     * @return a {@link PageResponse} containing the entities and pagination metadata
      */
     public static <E> PageResponse<E> paginate(
             final JpaRepository<E, ?> repository,
@@ -44,6 +61,14 @@ public final class Page {
 
     /**
      * Retrieves and maps a page using a Spring Data Pageable.
+     *
+     * @param <E>                   the entity type
+     * @param <D>                   the DTO or target mapped type
+     * @param repository            the Spring Data JPA repository
+     * @param pageable              the pagination request; defaults to page 0 with size 10 if null/unpaged
+     * @param allowedSortProperties whitelist of allowed entity property names for sorting
+     * @param mapper                the mapping function to transform entity to DTO
+     * @return a {@link PageResponse} containing the mapped DTOs and pagination metadata
      */
     public static <E, D> PageResponse<D> paginate(
             final JpaRepository<E, ?> repository,
@@ -121,6 +146,13 @@ public final class Page {
     /**
      * Retrieves a page using a JPA specification and Spring Data Pageable without content mapping.
      * The specification may be null to indicate unconstrained filtering.
+     *
+     * @param <E>                   the entity type
+     * @param repository            the Spring Data JPA specification executor repository
+     * @param specification         the JPA specification criteria filter (nullable)
+     * @param pageable              the pagination request; defaults to page 0 with size 10 if null/unpaged
+     * @param allowedSortProperties whitelist of allowed entity property names for sorting
+     * @return a {@link PageResponse} containing the entities and pagination metadata
      */
     public static <E> PageResponse<E> paginate(
             final JpaSpecificationExecutor<E> repository,
@@ -134,6 +166,15 @@ public final class Page {
     /**
      * Retrieves and maps a page using a JPA specification and Spring Data Pageable.
      * The specification may be null to indicate unconstrained filtering.
+     *
+     * @param <E>                   the entity type
+     * @param <D>                   the DTO or target mapped type
+     * @param repository            the Spring Data JPA specification executor repository
+     * @param specification         the JPA specification criteria filter (nullable)
+     * @param pageable              the pagination request; defaults to page 0 with size 10 if null/unpaged
+     * @param allowedSortProperties whitelist of allowed entity property names for sorting
+     * @param mapper                the mapping function to transform entity to DTO
+     * @return a {@link PageResponse} containing the mapped DTOs and pagination metadata
      */
     public static <E, D> PageResponse<D> paginate(
             final JpaSpecificationExecutor<E> repository,
@@ -153,6 +194,16 @@ public final class Page {
 
     /**
      * Retrieves a page using a JPA specification and explicit pagination parameters without mapping.
+     *
+     * @param <E>                   the entity type
+     * @param repository            the Spring Data JPA specification executor repository
+     * @param specification         the JPA specification criteria filter (nullable)
+     * @param page                  the zero-based page index (must be &gt;= 0)
+     * @param size                  the page size (must be between 1 and 100)
+     * @param sortBy                the property to sort by (nullable)
+     * @param sortDirection         the sort direction ('asc' or 'desc', case-insensitive, nullable)
+     * @param allowedSortProperties whitelist of allowed entity property names for sorting
+     * @return a {@link PageResponse} containing the entities and pagination metadata
      */
     public static <E> PageResponse<E> paginate(
             final JpaSpecificationExecutor<E> repository,
@@ -167,8 +218,19 @@ public final class Page {
     }
 
     /**
-     * Retrieves and maps a page using a JPA specification and explicit
-     * pagination and sorting parameters.
+     * Retrieves and maps a page using a JPA specification and explicit pagination and sorting parameters.
+     *
+     * @param <E>                   the entity type
+     * @param <D>                   the DTO or target mapped type
+     * @param repository            the Spring Data JPA specification executor repository
+     * @param specification         the JPA specification criteria filter (nullable)
+     * @param page                  the zero-based page index (must be &gt;= 0)
+     * @param size                  the page size (must be between 1 and 100)
+     * @param sortBy                the property to sort by (nullable)
+     * @param sortDirection         the sort direction ('asc' or 'desc', case-insensitive, nullable)
+     * @param allowedSortProperties whitelist of allowed entity property names for sorting
+     * @param mapper                the mapping function to transform entity to DTO
+     * @return a {@link PageResponse} containing the mapped DTOs and pagination metadata
      */
     public static <E, D> PageResponse<D> paginate(
             final JpaSpecificationExecutor<E> repository,
