@@ -1,4 +1,4 @@
-name: Digital Bank System
+name: digital-bank-system
 x-logging: &default-logging
   driver: json-file
   options:
@@ -50,6 +50,29 @@ services:
       timeout: 5s
       retries: 10
       start_period: 5s
+    logging: *default-logging
+  # RabbitMQ (Message Broker & Management Web UI)
+  rabbitmq:
+    image: rabbitmq:4-management-alpine
+    container_name: rabbitmq
+    hostname: rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+    ports:
+      - "127.0.0.1:5672:5672"     # AMQP protocol (messaging clients)
+      - "127.0.0.1:15672:15672"   # RabbitMQ Management Web UI (http://localhost:15672)
+    networks:
+      - bank
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
     logging: *default-logging
   # Kafka (KRaft, single node)
   kafka:
@@ -120,3 +143,5 @@ volumes:
     name: redis_data
   kafka_data:
     name: kafka_data
+  rabbitmq_data:
+    name: rabbitmq_data
