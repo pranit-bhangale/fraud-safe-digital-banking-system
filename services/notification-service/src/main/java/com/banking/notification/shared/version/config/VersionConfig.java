@@ -1,6 +1,6 @@
 package com.banking.notification.shared.version.config;
 
-import com.pranit.notification.shared.version.service.VersionParser;
+import com.banking.notification.shared.version.service.VersionParser;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.servlet.config.annotation.ApiVersionConfigurer;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;

@@ -28,10 +28,16 @@ public class ExtractClaimImpl implements ExtractClaim {
     public String getUsernameFromAccessToken(final Claims claims) {
         return claims.getSubject();
     }
-    
+
     @Override
     public Claims validateAndParseToken(final String token) {
         try {
+            if (token == null || token.isBlank()) {
+                throw new JwtException("JWT token is missing");
+            }
+            if (token.chars().filter(ch -> ch == '.').count() != 2) {
+                throw new JwtException("Invalid JWT compact format");
+            }
             return Jwts.parser()
                     .verifyWith(publicKey)
                     .build()

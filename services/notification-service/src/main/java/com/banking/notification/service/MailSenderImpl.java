@@ -10,7 +10,6 @@ import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.MailAuthenticationException;
 import org.springframework.mail.MailException;
 import org.springframework.mail.MailParseException;
 import org.springframework.mail.MailPreparationException;
@@ -81,7 +80,7 @@ public class MailSenderImpl implements MailSender {
     private void deliver(final EmailRequest request, final MimeMessage message) {
         try {
             this.javaMailSender.send(message);
-        } catch (final MailAuthenticationException | MailParseException | MailPreparationException e) {
+        } catch (MailParseException | MailPreparationException e) {
             log.error("SMTP rejected email eventId={} (non-retryable)", request.eventId(), e);
             throw new EmailPermanentDeliveryException("SMTP rejected email", request.eventId(), e);
         } catch (final MailException e) {

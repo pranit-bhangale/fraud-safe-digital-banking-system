@@ -17,16 +17,16 @@ import java.util.Map;
 @Component
 public class NotificationEventMapper {
 
-    private static final Spec WELCOME = new Spec
-            (NotificationType.WELCOME, "Welcome to Digital Banking", "welcome", List.of("name"));
+    private static final Spec WELCOME = new Spec(NotificationType.WELCOME, "Welcome to Digital Banking",
+            "mail/welcome", List.of("organizationName", "organizationUrl", "fullName", "username", "createdAt"));
     private static final Spec OTP =
-            new Spec(NotificationType.OTP, "Your one-time password", "otp", List.of("otp", "validForMinutes"));
+            new Spec(NotificationType.OTP, "Your one-time password", "mail/otp", List.of("otp", "validForMinutes"));
     private static final Spec TXN_SUCCESS =
-            new Spec(NotificationType.TXN_SUCCESS, "Transaction successful", "txn-success", List.of("amount", "referenceNo"));
+            new Spec(NotificationType.TXN_SUCCESS, "Transaction successful", "mail/txn-success", List.of("amount", "referenceNo"));
     private static final Spec TXN_FAILED =
-            new Spec(NotificationType.TXN_FAILED, "Transaction failed", "txn-failed", List.of("amount", "referenceNo"));
+            new Spec(NotificationType.TXN_FAILED, "Transaction failed", "mail/txn-failed", List.of("amount", "referenceNo"));
     private static final Spec FRAUD_ALERT =
-            new Spec(NotificationType.FRAUD_ALERT, "Security alert on your account", "fraud-alert", List.of("amount", "referenceNo"));
+            new Spec(NotificationType.FRAUD_ALERT, "Security alert on your account", "mail/fraud-alert", List.of("amount", "referenceNo"));
 
     private static final Map<String, Spec> SPECS = buildSpecs();
 
@@ -69,8 +69,8 @@ public class NotificationEventMapper {
             }
         }
         if (missing != null) {
-            throw new EmailValidationException(
-                    "Missing template data " + missing + " for " + spec.type(), event.eventId());
+            throw new EmailValidationException
+                    ("Missing template data " + missing + " for " + spec.type(), event.eventId());
         }
     }
 
@@ -78,23 +78,21 @@ public class NotificationEventMapper {
         return value == null || (value instanceof CharSequence text && !StringUtils.hasText(text));
     }
 
+    public NotificationType resolveType(final NotificationEvent event) {
+        return resolveSpec(event).type();
+    }
+
     public EmailRequest toEmailRequest(final NotificationEvent event) {
         final String email = event.email();
         if (email == null || email.isBlank()) {
             throw new EmailValidationException("Recipient email is required for email channel", event.eventId());
         }
-
         final Spec spec = resolveSpec(event);
         checkRequiredData(event, spec);
-
-        // event.data() is already an unmodifiable copy; direct constructor skips the builder
         return new EmailRequest(
-                event.eventId(),
-                spec.type(),
-                new Recipient(email),
-                spec.subject(),
-                spec.template(),
-                event.data());
+                event.eventId(), spec.type(), new Recipient(email),
+                spec.subject(), spec.template(), event.data()
+        );
     }
 
     private record Spec(NotificationType type, String subject, String template, List<String> requiredData) {

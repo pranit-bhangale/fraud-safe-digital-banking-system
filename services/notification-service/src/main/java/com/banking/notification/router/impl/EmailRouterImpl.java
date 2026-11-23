@@ -7,7 +7,6 @@ import com.banking.notification.exception.InvalidEmailEventException;
 import com.banking.notification.handler.EmailHandler;
 import com.banking.notification.router.EmailRouter;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 
 import java.util.Collections;
@@ -39,7 +38,6 @@ public class EmailRouterImpl implements EmailRouter {
     }
 
     @Override
-    @Async("emailExecutor")
     public void send(final EmailEvent event, final NotificationType type) {
         if (event == null || event.getEventId() == null || event.getEventId().isBlank()) {
             throw new IllegalArgumentException("Email event and its eventId cannot be null or blank");
@@ -64,11 +62,6 @@ public class EmailRouterImpl implements EmailRouter {
         }
         log.info("Routing email eventId: {} purpose: {} handler: {}",
                 request.eventId(), type, handler.getClass().getSimpleName());
-        try {
-            handler.send(request);
-        } catch (final RuntimeException ex) {
-            log.error("Failed to process email eventId: {}: {}", request.eventId(), ex.getMessage(), ex);
-            throw ex;
-        }
+        handler.send(request);
     }
 }

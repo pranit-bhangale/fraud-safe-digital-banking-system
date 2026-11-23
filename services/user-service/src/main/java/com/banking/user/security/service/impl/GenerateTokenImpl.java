@@ -1,11 +1,11 @@
 package com.banking.user.security.service.impl;
 
-import com.pranit.todo.dto.TokenResponse;
-import com.pranit.todo.model.UserDetail;
-import com.pranit.todo.properties.KeysPathProperties;
-import com.pranit.todo.properties.TokenProperties;
-import com.pranit.todo.security.load.LoadKey;
-import com.pranit.todo.security.service.GenerateToken;
+import com.banking.user.dto.TokenResponse;
+import com.banking.user.model.UserDetail;
+import com.banking.user.properties.KeysPathProperties;
+import com.banking.user.properties.TokenProperties;
+import com.banking.user.security.load.LoadKey;
+import com.banking.user.security.service.GenerateToken;
 import io.jsonwebtoken.Jwts;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.core.GrantedAuthority;
@@ -49,7 +49,7 @@ public class GenerateTokenImpl implements GenerateToken {
                 .issuedAt(Date.from(now))
                 .expiration(Date.from(expiry))
                 .claim("roles", roles)
-                .claim("token", "access")
+                .claim("type", "access")
                 .signWith(this.privateKey)
                 .compact();
         return TokenResponse.builder()

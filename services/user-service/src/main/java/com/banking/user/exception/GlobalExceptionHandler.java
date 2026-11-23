@@ -1,6 +1,7 @@
 package com.banking.user.exception;
 
 import com.banking.user.wrapper.ErrorResponse;
+import com.banking.utility.exception.BaseException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;

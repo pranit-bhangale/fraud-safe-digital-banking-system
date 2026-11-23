@@ -113,22 +113,24 @@ public class AuthServiceImpl implements AuthService {
                 .build();
     }
 
+
     @Override
-    public void logout(final String authorization) {
-        if (authorization == null || !authorization.startsWith(BEARER_PREFIX)) {
-            throw new InvalidRequestException("Invalid authorization header");
+    public void logout(final String token) {
+        if (token == null || token.isBlank()) {
+            throw new InvalidRequestException("Access token is required");
         }
-        final String token = authorization.substring(BEARER_PREFIX.length()).trim();
         final Claims claims;
         try {
             claims = this.extractClaim.validateAndParseToken(token);
         } catch (final JwtException e) {
-            return;
+            throw new InvalidRequestException("Invalid or expired access token");
+        }
+        if (!this.extractClaim.isAccessToken(claims)) {
+            throw new InvalidRequestException("Only access tokens can be revoked");
         }
         final Date expiration = claims.getExpiration();
         if (expiration == null) return;
-        final Duration ttl = Duration.between
-                (Instant.now(), expiration.toInstant()).plus(CLOCK_SKEW_BUFFER);
+        final Duration ttl = Duration.between(Instant.now(), expiration.toInstant()).plus(CLOCK_SKEW_BUFFER);
         if (ttl.isNegative() || ttl.isZero()) return;
         this.tokenBlacklist.blacklist(token, ttl);
     }

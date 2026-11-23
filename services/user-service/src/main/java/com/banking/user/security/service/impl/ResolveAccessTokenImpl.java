@@ -1,6 +1,6 @@
 package com.banking.user.security.service.impl;
 
-import com.pranit.todo.security.service.ResolveAccessToken;
+import com.banking.user.security.service.ResolveAccessToken;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
