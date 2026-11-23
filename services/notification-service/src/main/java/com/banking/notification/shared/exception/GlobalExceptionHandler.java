@@ -1,14 +1,10 @@
 package com.banking.notification.shared.exception;
 
-import com.pranit.notification.shared.wrapper.ErrorResponse;
+import com.banking.notification.shared.wrapper.ErrorResponse;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.authentication.BadCredentialsException;
-import org.springframework.security.authentication.DisabledException;
-import org.springframework.security.authorization.AuthorizationDeniedException;
-import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -26,12 +22,6 @@ import java.util.Map;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    @ExceptionHandler(DisabledException.class)
-    public ResponseEntity<ErrorResponse> handleDisabled
-            (final DisabledException ex, final HttpServletRequest request) {
-        return buildResponse(HttpStatus.FORBIDDEN, "Account is not active. Please verify your email.", request);
-    }
-
     private ResponseEntity<ErrorResponse> buildResponse
             (final HttpStatus status, final String message, final HttpServletRequest request) {
         return ResponseEntity.status(status)
@@ -43,18 +33,6 @@ public class GlobalExceptionHandler {
                         .build());
     }
 
-    @ExceptionHandler(BadCredentialsException.class)
-    public ResponseEntity<ErrorResponse> handleBadCredentials
-            (final BadCredentialsException ex, final HttpServletRequest request) {
-        return buildResponse(HttpStatus.UNAUTHORIZED, "Invalid username or password.", request);
-    }
-
-    @ExceptionHandler(AuthorizationDeniedException.class)
-    public ResponseEntity<ErrorResponse> handleAuthorizationAccess
-            (final AuthorizationDeniedException ex, final HttpServletRequest request) {
-        return buildResponse(HttpStatus.FORBIDDEN, "Access denied. You are not authorized to perform this operation.", request);
-    }
-
     @ExceptionHandler(BaseException.class)
     public ResponseEntity<ErrorResponse> handleBaseException(final BaseException ex, final HttpServletRequest request) {
         final ResponseStatus responseStatus = ex.getClass().getAnnotation(ResponseStatus.class);
@@ -62,12 +40,7 @@ public class GlobalExceptionHandler {
                 ? responseStatus.value() : HttpStatus.INTERNAL_SERVER_ERROR;
         return buildResponse(status, ex.getMessage(), request);
     }
-
-    @ExceptionHandler(UsernameNotFoundException.class)
-    public ResponseEntity<ErrorResponse> handleUsernameNotFound(final UsernameNotFoundException ex, final HttpServletRequest request) {
-        return buildResponse(HttpStatus.UNAUTHORIZED, ex.getMessage(), request);
-    }
-
+    
     @ExceptionHandler(MaxUploadSizeExceededException.class)
     public ResponseEntity<ErrorResponse> handleMaxSize
             (final MaxUploadSizeExceededException ex, final HttpServletRequest request) {
