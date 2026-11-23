@@ -3,6 +3,7 @@ package com.banking.security.config;
 import com.banking.security.util.LoadKey;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
@@ -17,12 +18,15 @@ import java.security.interfaces.RSAPublicKey;
 @Configuration(proxyBeanMethods = false)
 public class JwtConfig {
 
-    @Value("${spring.security.oauth2.resourceserver.jwt.public-key-location}")
-    private String publicKeyLocation;
-
     @Bean
     @ConditionalOnMissingBean(JwtDecoder.class)
-    public JwtDecoder jwtDecoder() throws Exception {
+    @ConditionalOnProperty(
+            prefix = "spring.security.oauth2.resourceserver.jwt",
+            name = "public-key-location"
+    )
+    public JwtDecoder jwtDecoder(
+            @Value("${spring.security.oauth2.resourceserver.jwt.public-key-location}")
+            String publicKeyLocation) throws Exception {
         final RSAPublicKey publicKey = LoadKey.loadPublicKey(publicKeyLocation);
         return NimbusJwtDecoder.withPublicKey(publicKey).build();
     }
