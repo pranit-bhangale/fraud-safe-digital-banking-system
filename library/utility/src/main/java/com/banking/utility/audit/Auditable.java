@@ -43,12 +43,4 @@ public abstract class Auditable {
     @Version
     @Column(name = "version", nullable = false)
     private Long version = 0L;
-
-    /**
-     * Protected default constructor for JPA entity subclasses.
-     * Initializes the entity version to {@code 0L}.
-     */
-    protected Auditable() {
-        this.version = 0L;
-    }
 }
