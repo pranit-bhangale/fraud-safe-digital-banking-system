@@ -24,14 +24,9 @@ public record FraudProperties(
         }
     }
 
-    /**
-     * Score added per triggered rule. A payment is FRAUD when the total >= threshold.
-     */
     public record Weights(
-            @DefaultValue("40") int userVelocity,
-            @DefaultValue("40") int cardVelocity,
-            @DefaultValue("20") int deviceVelocity,
-            @DefaultValue("10") int ipVelocity,
+            @DefaultValue("40") int senderVelocity,
+            @DefaultValue("40") int receiverVelocity,
             @DefaultValue("30") int burst,
             @DefaultValue("30") int highAmount) {
     }

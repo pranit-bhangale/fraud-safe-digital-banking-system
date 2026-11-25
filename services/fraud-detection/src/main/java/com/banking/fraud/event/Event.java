@@ -6,6 +6,9 @@ import lombok.Builder;
 import java.math.BigDecimal;
 import java.util.List;
 
+/**
+ * Enterprise Banking Event Envelope for Account-to-Account Transactions.
+ */
 @Builder
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record Event(
@@ -14,47 +17,46 @@ public record Event(
         FraudEvent event
 ) {
     /**
-     * Input: topic payment.initiated (Kafka). Key = userId.
+     * Inbound: topic banking.payment.initiated.v1. Key = senderAccountNo.
      */
     @Builder
     public record PaymentRequest(
             String txnId,
-            String userId,
+            String senderAccountNo,
+            String receiverAccountNo,
             BigDecimal amount,
-            String currency,
-            String cardToken,
-            String deviceId,
-            String ipAddress,
-            String merchantId,
+            String accountType,
             long createdAtMs) {
     }
 
     /**
-     * Output when SAFE: topic payment.approved (Kafka). Consumed by the payment service.
+     * Outbound when SAFE: topic banking.payment.fraud-ack.v1.
      */
     @Builder
     public record PaymentApproved(
             String txnId,
-            String userId,
+            String senderAccountNo,
+            String receiverAccountNo,
             BigDecimal amount,
-            String currency,
-            String merchantId,
+            String accountType,
             int riskScore,
             long approvedAtMs) {
     }
 
     /**
-     * Output when FRAUD: topic fraud.detected (Kafka). Audit trail + notification relay.
+     * Outbound when FRAUD or ERROR: topic banking.payment.fraud-ack.v1 and banking.fraud.alerts.v1.
      */
     @Builder
     public record FraudEvent(
             String eventId,
             String txnId,
-            String userId,
+            String senderAccountNo,
+            String receiverAccountNo,
             BigDecimal amount,
-            String currency,
+            String accountType,
             int riskScore,
             List<String> reasons,
+            String action,
             long detectedAtMs) {
     }
 }
