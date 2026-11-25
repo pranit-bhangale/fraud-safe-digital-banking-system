@@ -1,21 +1,22 @@
 
 CREATE TABLE IF NOT EXISTS transactions
 (
-    id                UUID           NOT NULL,
-    reference_no      VARCHAR(50)    NOT NULL,
-    account_id        UUID           NOT NULL,
-    transaction_type  VARCHAR(20)    NOT NULL,
-    amount            NUMERIC(19, 2) NOT NULL,
-    balance_after     NUMERIC(19, 2) NOT NULL,
-    description       VARCHAR(500),
-    transaction_date  TIMESTAMP WITH TIME ZONE NOT NULL,
+    id               UUID           NOT NULL,
+    user_id          UUID           NOT NULL,
+    reference_no     VARCHAR(50)    NOT NULL,
+    account_no       VARCHAR           NOT NULL,
+    transaction_type VARCHAR(20)    NOT NULL,
+    amount           NUMERIC(19, 2) NOT NULL,
+    balance_after    NUMERIC(19, 2) NOT NULL,
+    description      VARCHAR(500),
+    transaction_date TIMESTAMP WITH TIME ZONE NOT NULL,
 
     -- Audit fields
-    created_at        TIMESTAMP WITH TIME ZONE NOT NULL,
-    updated_at        TIMESTAMP WITH TIME ZONE NOT NULL,
-    created_by        UUID,
-    updated_by        UUID,
-    version           BIGINT         NOT NULL DEFAULT 0,
+    created_at       TIMESTAMP WITH TIME ZONE NOT NULL,
+    updated_at       TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_by       UUID,
+    updated_by       UUID,
+    version          BIGINT         NOT NULL DEFAULT 0,
 
     CONSTRAINT pk_transactions
         PRIMARY KEY (id),
@@ -23,9 +24,12 @@ CREATE TABLE IF NOT EXISTS transactions
     CONSTRAINT uq_transactions_reference_no
         UNIQUE (reference_no),
 
-    CONSTRAINT fk_transactions_account_id
-        FOREIGN KEY (account_id)
+    CONSTRAINT fk_transactions_account_no
+        FOREIGN KEY (account_no)
         REFERENCES accounts(id),
+
+    CONSTRAINT ck_transactions_user_id_not_null
+        CHECK (user_id IS NOT NULL),
 
     CONSTRAINT ck_transactions_reference_no_not_blank
         CHECK (length(btrim(reference_no)) > 0),
@@ -49,9 +53,13 @@ CREATE TABLE IF NOT EXISTS transactions
         CHECK (version >= 0)
 );
 
+-- User ID index
+CREATE INDEX idx_transactions_user_id
+    ON transactions(user_id);
+
 -- Account ID index
-CREATE INDEX idx_transactions_account_id
-    ON transactions(account_id);
+CREATE INDEX idx_transactions_account_no
+    ON transactions(account_no);
 
 -- Transaction type index
 CREATE INDEX idx_transactions_type
@@ -68,6 +76,14 @@ CREATE INDEX idx_transactions_created_at
 CREATE INDEX idx_transactions_created_by
     ON transactions(created_by);
 
+-- Composite index for user transaction history
+CREATE INDEX idx_transactions_user_date
+    ON transactions(user_id, transaction_date DESC);
+
+-- Composite index for account transaction history
+CREATE INDEX idx_transactions_account_date
+    ON transactions(account_id, transaction_date DESC);
+
 -- Table documentation
 COMMENT ON TABLE transactions
     IS 'Stores financial transactions performed on customer bank accounts';
@@ -75,10 +91,13 @@ COMMENT ON TABLE transactions
 COMMENT ON COLUMN transactions.id
     IS 'Primary key generated as UUID';
 
+COMMENT ON COLUMN transactions.user_id
+    IS 'References the user who owns the transaction account';
+
 COMMENT ON COLUMN transactions.reference_no
     IS 'Unique reference number identifying the transaction';
 
-COMMENT ON COLUMN transactions.account_id
+COMMENT ON COLUMN transactions.account_no
     IS 'References the bank account associated with the transaction';
 
 COMMENT ON COLUMN transactions.transaction_type

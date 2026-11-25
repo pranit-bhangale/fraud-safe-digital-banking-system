@@ -28,7 +28,7 @@ import java.util.UUID;
         name = "transactions",
         indexes = {
                 @Index(name = "idx_transactions_reference_no", columnList = "reference_no"),
-                @Index(name = "idx_transactions_account_id", columnList = "account_id"),
+                @Index(name = "idx_transactions_account_no", columnList = "account_no"),
                 @Index(name = "idx_transactions_type", columnList = "type"),
                 @Index(name = "idx_transactions_transaction_date", columnList = "transaction_date")
         }
@@ -45,11 +45,14 @@ public class Transaction extends Auditable {
     @Column(name = "id", nullable = false, updatable = false)
     private UUID id;
 
+    @Column(name = "user_id", nullable = false)
+    private UUID userId;
+
     @Column(name = "reference_no", nullable = false, unique = true, length = 50)
     private String referenceNo;
 
-    @Column(name = "account_id", nullable = false)
-    private UUID accountId;
+    @Column(name = "account_no", nullable = false)
+    private String accountNo;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "transaction_type", nullable = false, length = 20)
