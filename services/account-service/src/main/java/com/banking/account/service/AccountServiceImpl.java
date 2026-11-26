@@ -59,12 +59,12 @@ public class AccountServiceImpl implements AccountService {
 
     @Override
     @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class, readOnly = true)
-    public AccountDetail fetchAccountDetail(String accountNo) {
+    public AccountDetail fetchAccountDetail(String accountNo, int page, int size) {
         Account account = this.repository.findByAccountNo(accountNo)
                 .orElseThrow(() -> new ResourceNotFoundException("Account not found: " + accountNo));
         AccountDetail.UserInformation user = this.userFeignClient.getUserById(account.getUserId());
-        List<AccountDetail.AccountInformation.TransactionHistory> history = this.transactionGrpcClient
-                .getTransactionHistory(account.getUserId(), account.getAccountNo());
+        AccountDetail.PaginatedTransactionHistory history = this.transactionGrpcClient
+                .getTransactionHistory(account.getUserId(), account.getAccountNo(), page, size);
         return AccountDetail.builder()
                 .user(user)
                 .account(AccountDetail.AccountInformation.builder()

@@ -25,7 +25,6 @@ import java.util.concurrent.TimeUnit;
 public class TransactionGrpcClient {
 
     private static final long TIMEOUT_SECONDS = 10;
-    private static final int HISTORY_PAGE_SIZE = 100;
 
     private final TransactionServiceGrpc.TransactionServiceBlockingStub stub;
 
@@ -63,27 +62,38 @@ public class TransactionGrpcClient {
         }
     }
 
-    public List<AccountDetail.AccountInformation.TransactionHistory> getTransactionHistory(
-            UUID userId, String accountNo) {
+    public AccountDetail.PaginatedTransactionHistory getTransactionHistory
+            (UUID userId, String accountNo, int page, int size) {
         GetUserTransactionHistoryRequest request = GetUserTransactionHistoryRequest.newBuilder()
                 .setUserId(userId.toString())
                 .setAccountNo(accountNo)
-                .setPage(0)
-                .setSize(HISTORY_PAGE_SIZE)
+                .setPage(page)
+                .setSize(size)
                 .build();
         try {
-            return stubWithDeadline().getUserTransactionHistory(request)
-                    .getTransactionsList().stream()
+            var response = stubWithDeadline().getUserTransactionHistory(request);
+            List<AccountDetail.TransactionHistory> transactions = response
+                    .getTransactionsList()
+                    .stream()
                     .map(this::toHistory)
                     .toList();
+            return AccountDetail.PaginatedTransactionHistory.builder()
+                    .transactions(transactions)
+                    .page(response.getPage())
+                    .size(response.getSize())
+                    .totalElements(response.getTotalElements())
+                    .totalPages(response.getTotalPages())
+                    .hasNext(response.getHasNext())
+                    .hasPrevious(response.getHasPrevious())
+                    .build();
         } catch (StatusRuntimeException e) {
-            log.error("getUserTransactionHistory failed: {}", e.getStatus(), e);
+            log.error("UserTransactionHistory failed: {}", e.getStatus(), e);
             throw new GrpcException("Failed to fetch transaction history" + e);
         }
     }
 
-    private AccountDetail.AccountInformation.TransactionHistory toHistory(TransactionInformation t) {
-        return AccountDetail.AccountInformation.TransactionHistory.builder()
+    private AccountDetail.TransactionHistory toHistory(TransactionInformation t) {
+        return AccountDetail.TransactionHistory.builder()
                 .transactionId(UUID.fromString(t.getTransactionId()))
                 .referenceNo(t.getReferenceNo())
                 .type(t.getType())
