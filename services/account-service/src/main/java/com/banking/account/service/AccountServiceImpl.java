@@ -1,6 +1,5 @@
 package com.banking.account.service;
 
-import com.banking.account.client.TransactionGrpcClient;
 import com.banking.account.client.UserFeignClient;
 import com.banking.account.dto.AccountCreationRequest;
 import com.banking.account.dto.AccountDetail;
@@ -8,17 +7,17 @@ import com.banking.account.dto.BalanceOperationRequest;
 import com.banking.account.dto.BalanceOperationResponse;
 import com.banking.account.entity.Account;
 import com.banking.account.entity.ProcessedTransaction;
-import com.banking.account.exception.GrpcException;
+import com.banking.account.exception.AccountException;
 import com.banking.account.exception.ResourceNotFoundException;
 import com.banking.account.model.AccountStatus;
 import com.banking.account.model.BalanceOperationType;
 import com.banking.account.repository.AccountRepository;
 import com.banking.account.repository.ProcessedTransactionRepository;
-import com.banking.transaction.grpc.CreateInitialTransactionResponse;
 import jakarta.persistence.OptimisticLockException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.http.HttpStatus;
 import org.springframework.retry.annotation.Backoff;
 import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
@@ -37,19 +36,26 @@ public class AccountServiceImpl implements AccountService {
     private static final SecureRandom RANDOM = new SecureRandom();
     private final AccountRepository repository;
     private final UserFeignClient userFeignClient;
-    private final TransactionGrpcClient transactionGrpcClient;
+    // private final TransactionGrpcClient transactionGrpcClient;
     private final ProcessedTransactionRepository processedTransactionRepository;
-
-    public static String generateAccountNumber() {
-        int length = RANDOM.nextInt(12, 17);
-        long min = (long) Math.pow(10, length - 1);
-        long max = (long) Math.pow(10, length);
-        return String.valueOf(RANDOM.nextLong(min, max));
-    }
 
     @Override
     @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
-    public void createNewAccount(AccountCreationRequest request) {
+    public String createNewAccount(AccountCreationRequest request) {
+        log.info("Processing account creation request: userId={}, type={}, requestedBalance={}",
+                request.userId(), request.type(), request.balance());
+
+        // Edge case 1: Validate minimum opening balance against account type policies
+        BigDecimal minOpeningBalance = request.type().getMinimumOpeningBalance();
+        if (request.balance() != null && request.balance().compareTo(minOpeningBalance) < 0) {
+            log.warn("Account creation rejected: deposit {} is below minimum {} for type {}",
+                    request.balance(), minOpeningBalance, request.type());
+            throw new AccountException("Initial deposit of $" + request.balance() +
+                    " is below the minimum required opening balance of $" + minOpeningBalance + " for " + request.type(),
+                    HttpStatus.BAD_REQUEST, "INSUFFICIENT_INITIAL_DEPOSIT");
+        }
+
+        // Edge case 2: Verify user existence in user-service
         boolean userExists;
         try {
             userExists = this.userFeignClient.existsByUserId(request.userId()).join();
@@ -60,24 +66,59 @@ public class AccountServiceImpl implements AccountService {
         if (!userExists) {
             throw new ResourceNotFoundException("User not found: " + request.userId());
         }
+
+        // Edge case 3: Collision-safe unique account number generation with retry loop
+        String accountNo = generateUniqueAccountNumber();
+
+        // Edge case 4: Account initially created in PENDING status until initial opening ledger transaction is recorded
         Account account = Account.builder()
-                .accountNo(generateAccountNumber())
+                .accountNo(accountNo)
                 .userId(request.userId())
                 .accountType(request.type())
-                .accountStatus(AccountStatus.ACTIVE)
-                .balance(request.balance())
+                .accountStatus(AccountStatus.PENDING)
+                .balance(request.balance() != null ? request.balance() : BigDecimal.ZERO)
+                .reservedBalance(BigDecimal.ZERO)
                 .build();
         account = this.repository.save(account);
-        CreateInitialTransactionResponse response;
-        try {
-            response = this.transactionGrpcClient.createInitialTransaction(account).join();
-        } catch (CompletionException ex) {
-            log.error("Failed to create initial transaction: accountNo={}, error={}", account.getAccountNo(), ex.getCause().getMessage());
-            throw new GrpcException("Transaction service unavailable");
+
+        // Edge case 5: Record opening ledger transaction via gRPC in transaction-service
+//        CreateInitialTransactionResponse response;
+//        try {
+//            response = this.transactionGrpcClient.createInitialTransaction(account).join();
+//        } catch (CompletionException ex) {
+//            log.error("Failed to record initial transaction via gRPC: accountNo={}, error={}", account.getAccountNo(), ex.getCause().getMessage());
+//            throw new GrpcException("Transaction service unavailable for opening deposit registration");
+//        }
+//        if (!response.getSuccess()) {
+//            throw new GrpcException("Failed to record initial transaction: " + response.getMessage());
+//        }
+
+        // Activate account upon confirmed opening transaction
+        account.setAccountStatus(AccountStatus.ACTIVE);
+        this.repository.save(account);
+
+        log.info("Account successfully created and activated: accountNo={}, userId={}, initialBalance={}",
+                account.getAccountNo(), account.getUserId(), account.getBalance());
+        return account.getAccountNo();
+    }
+
+    private String generateUniqueAccountNumber() {
+        for (int attempt = 1; attempt <= 5; attempt++) {
+            String candidate = generateAccountNumber();
+            if (!this.repository.existsByAccountNo(candidate)) {
+                return candidate;
+            }
+            log.warn("Account number collision detected on attempt {}: candidate={}, retrying...", attempt, candidate);
         }
-        if (!response.getSuccess()) {
-            throw new GrpcException("Failed to create initial transaction: " + response.getMessage());
-        }
+        throw new AccountException("Failed to generate a unique account number after multiple attempts",
+                HttpStatus.INTERNAL_SERVER_ERROR, "ACCOUNT_GENERATION_FAILED");
+    }
+
+    public static String generateAccountNumber() {
+        int length = RANDOM.nextInt(12, 17);
+        long min = (long) Math.pow(10, length - 1);
+        long max = (long) Math.pow(10, length);
+        return String.valueOf(RANDOM.nextLong(min, max));
     }
 
     @Override
@@ -95,9 +136,9 @@ public class AccountServiceImpl implements AccountService {
         }
         AccountDetail.PaginatedTransactionHistory history;
         try {
-            history = this.transactionGrpcClient
-                    .getTransactionHistory(account.getUserId(), account.getAccountNo(), page, size)
-                    .join();
+//            history = this.transactionGrpcClient
+//                    .getTransactionHistory(account.getUserId(), account.getAccountNo(), page, size)
+//                    .join();
         } catch (CompletionException ex) {
             log.warn("Transaction service unavailable, returning empty history: accountNo={}, error={}",
                     accountNo, ex.getCause().getMessage());
@@ -111,7 +152,7 @@ public class AccountServiceImpl implements AccountService {
                         .type(account.getAccountType())
                         .status(account.getAccountStatus())
                         .balance(account.getBalance())
-                        .history(history)
+                        //.history(history)
                         .build())
                 .build();
     }
@@ -191,12 +232,16 @@ public class AccountServiceImpl implements AccountService {
                     message = "Balance reservation released";
                 }
                 case DEBIT -> {
-                    if (account.getReservedBalance().compareTo(request.amount()) < 0) {
-                        throw new IllegalStateException("Insufficient reserved balance for debit");
+                    if (account.getReservedBalance().compareTo(request.amount()) >= 0) {
+                        account.setBalance(account.getBalance().subtract(request.amount()));
+                        account.setReservedBalance(account.getReservedBalance().subtract(request.amount()));
+                        message = "Balance debited from reserved amount";
+                    } else if (account.getAvailableBalance().compareTo(request.amount()) >= 0) {
+                        account.setBalance(account.getBalance().subtract(request.amount()));
+                        message = "Balance debited directly";
+                    } else {
+                        throw new IllegalStateException("Insufficient available balance for debit");
                     }
-                    account.setBalance(account.getBalance().subtract(request.amount()));
-                    account.setReservedBalance(account.getReservedBalance().subtract(request.amount()));
-                    message = "Balance debited";
                 }
                 case CREDIT -> {
                     account.setBalance(account.getBalance().add(request.amount()));

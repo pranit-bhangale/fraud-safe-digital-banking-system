@@ -7,8 +7,6 @@ import com.banking.transaction.model.TransactionStatus;
 import com.banking.transaction.producer.TransactionProducer;
 import com.banking.transaction.repository.SagaRepository;
 import com.banking.transaction.repository.TransactionRepository;
-import com.banking.transaction.saga.step.ReleaseReservationStep;
-import com.banking.transaction.saga.step.ReserveBalanceStep;
 import com.banking.transaction.saga.step.UpdateBalanceStep;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,10 +15,14 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 
 /**
- * Orchestrates the saga for transaction processing with fraud detection.
- * Manages state transitions and coordinates between services via Kafka/REST.
+ * Orchestrates the saga for transaction processing with FRAUD DETECTION RUNNING FIRST.
+ * Step 1: Submit transaction to Fraud Service before locking or touching any account balances.
+ * Step 2: If Fraud rejects -> Terminate immediately as REJECTED_FRAUD (zero balance impact).
+ * Step 3: If Fraud approves -> Forward balance operations (debit sender, credit receiver).
+ * Step 4: If receiver credit fails -> Compensating rollback (refund sender).
  */
 @Slf4j
 @Component
@@ -30,35 +32,34 @@ public class TransactionSagaOrchestrator {
     private final TransactionRepository transactionRepository;
     private final SagaRepository sagaRepository;
     private final TransactionProducer transactionProducer;
-    private final ReserveBalanceStep reserveBalanceStep;
     private final UpdateBalanceStep updateBalanceStep;
-    private final ReleaseReservationStep releaseReservationStep;
 
     /**
      * Starts the saga for a new transaction.
-     * Step 1: Reserve sender balance
-     * Step 2: Submit to fraud service via Kafka
+     * Fraud detection runs FIRST - no balance is reserved yet.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public void startSaga(Transaction transaction) {
         Saga saga = Saga.builder()
                 .transaction(transaction)
-                .sagaState(SagaState.STARTED)
+                .sagaState(SagaState.FRAUD_CHECK)
                 .build();
         saga = sagaRepository.save(saga);
         SagaContext context = SagaContext.fromTransactionAndSaga(transaction, saga);
-        log.info("Starting saga for transaction: txnId={}, sagaId={}, type={}, amount={}",
-                transaction.getReferenceNo(), saga.getId(), transaction.getType(), transaction.getAmount());
-        executeReserveStep(context, saga);
+
+        log.info("Starting saga: Fraud evaluation running FIRST for txnId={}, sagaId={}, sender={}, amount={}",
+                transaction.getReferenceNo(), saga.getId(), transaction.getAccountNo(), transaction.getAmount());
+
+        submitToFraudService(context);
     }
 
     /**
-     * Handles fraud approval - continues saga to update balances.
+     * Handles fraud approval - proceeds with balance updates (debit sender, credit receiver).
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public void handleFraudApproved(Event.PaymentApproved approved) {
         String txnId = approved.txnId();
-        log.info("Fraud approved for txnId: {}, continuing saga", txnId);
+        log.info("Fraud approved for txnId: {}, proceeding to execute balance updates", txnId);
 
         Transaction transaction = transactionRepository.findByReferenceNo(txnId)
                 .orElseThrow(() -> new IllegalStateException("Transaction not found: " + txnId));
@@ -74,17 +75,17 @@ public class TransactionSagaOrchestrator {
         SagaContext context = SagaContext.fromTransactionAndSaga(transaction, saga);
         transaction.setFraudScore(approved.riskScore());
 
-        // Execute step: Update balances (debit sender, credit receiver)
         executeUpdateBalanceStep(context, saga, approved);
     }
 
     /**
-     * Handles fraud rejection - compensates by releasing reservation.
+     * Handles fraud rejection - cleanly marks transaction as REJECTED_FRAUD.
+     * Since fraud detection runs first, no balances were locked or deducted!
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public void handleFraudRejected(Event.FraudEvent fraud) {
         String txnId = fraud.txnId();
-        log.warn("Fraud rejected for txnId: {}, starting compensation", txnId);
+        log.warn("Fraud rejected for txnId: {}, terminating transaction cleanly with zero balance impact", txnId);
 
         Transaction transaction = transactionRepository.findByReferenceNo(txnId)
                 .orElseThrow(() -> new IllegalStateException("Transaction not found: " + txnId));
@@ -97,17 +98,22 @@ public class TransactionSagaOrchestrator {
             return;
         }
 
-        SagaContext context = SagaContext.fromTransactionAndSaga(transaction, saga);
+        String rejectionReason = fraud.reasons() != null ? String.join(", ", fraud.reasons()) : "FRAUD_REJECTED";
         transaction.setFraudScore(fraud.riskScore());
-        transaction.setRejectionReasons(fraud.reasons() != null ? String.join(", ", fraud.reasons()) : "FRAUD_REJECTED");
-        saga.setErrorMessage(fraud.reasons() != null ? String.join(", ", fraud.reasons()) : "FRAUD_REJECTED");
+        transaction.setRejectionReasons(rejectionReason);
+        transaction.setStatus(TransactionStatus.REJECTED_FRAUD);
+        transactionRepository.save(transaction);
 
-        // Execute compensation: Release reservation
-        executeCompensation(context, saga, transaction);
+        saga.setSagaState(SagaState.ROLLED_BACK);
+        saga.setErrorMessage(rejectionReason);
+        saga.setCompletedAt(Instant.now());
+        sagaRepository.save(saga);
+
+        log.info("Saga successfully closed for rejected txnId={}. No balance rollback was needed.", txnId);
     }
 
     /**
-     * Handles fraud check timeout or error - compensates.
+     * Handles fraud check timeout or communication error.
      */
     @Transactional(propagation = Propagation.REQUIRES_NEW, rollbackFor = Exception.class)
     public void handleFraudError(String txnId, String errorReason) {
@@ -119,72 +125,34 @@ public class TransactionSagaOrchestrator {
         Saga saga = sagaRepository.findByTransaction(transaction)
                 .orElseThrow(() -> new IllegalStateException("Saga not found for txnId: " + txnId));
 
-        if (!SagaState.FRAUD_CHECK.equals(saga.getSagaState())) {
-            log.warn("Invalid saga state for fraud error: txnId={}, state={}", txnId, saga.getSagaState());
-            return;
-        }
-
-        SagaContext context = SagaContext.fromTransactionAndSaga(transaction, saga);
         transaction.setRejectionReasons("FRAUD_CHECK_ERROR: " + errorReason);
+        transaction.setStatus(TransactionStatus.FAILED);
+        transactionRepository.save(transaction);
+
+        saga.setSagaState(SagaState.FAILED);
         saga.setErrorMessage("FRAUD_CHECK_ERROR: " + errorReason);
-
-        executeCompensation(context, saga, transaction);
-    }
-
-    private void executeReserveStep(SagaContext context, Saga saga) {
-        try {
-            log.debug("Executing reserve balance step: txnId={}", context.referenceNo());
-            reserveBalanceStep.execute(context);
-            updateSagaState(saga, SagaState.RESERVED);
-            submitToFraudService(context);
-        } catch (Exception e) {
-            log.error("Reserve balance step failed: txnId={}, error={}", context.referenceNo(), e.getMessage(), e);
-            saga.setErrorMessage(e.getMessage());
-            executeCompensation(context, saga, transactionRepository.findByReferenceNo(context.referenceNo()).orElseThrow());
-        }
+        saga.setCompletedAt(Instant.now());
+        sagaRepository.save(saga);
     }
 
     private void executeUpdateBalanceStep(SagaContext context, Saga saga, Event.PaymentApproved approved) {
+        Transaction transaction = transactionRepository.findByReferenceNo(context.referenceNo()).orElseThrow();
         try {
-            log.debug("Executing update balance step: txnId={}", context.referenceNo());
+            log.info("Updating balances for txnId={}, sagaId={}", context.referenceNo(), saga.getId());
             updateBalanceStep.execute(context, approved);
+
             updateSagaState(saga, SagaState.BALANCE_UPDATED);
-            completeSaga(transactionRepository.findByReferenceNo(context.referenceNo()).orElseThrow(), saga);
+            completeSaga(transaction, saga);
         } catch (Exception e) {
-            log.error("Update balance step failed: txnId={}, error={}", context.referenceNo(), e.getMessage(), e);
-            // No retry - immediate compensation
-            saga.setErrorMessage(e.getMessage());
-            executeCompensation(context, saga, transactionRepository.findByReferenceNo(context.referenceNo()).orElseThrow());
-        }
-    }
+            log.error("Update balance step failed for txnId={}: {}", context.referenceNo(), e.getMessage(), e);
 
-    private void executeCompensation(SagaContext context, Saga saga, Transaction transaction) {
-        try {
-            log.info("Executing compensation for txnId: {}", context.referenceNo());
-
-            // Update to compensating state
-            updateSagaState(saga, SagaState.COMPENSATING);
-
-            releaseReservationStep.execute(context);
-
-            // Mark as rolled back
-            updateSagaState(saga, SagaState.ROLLED_BACK);
-            saga.setCompletedAt(java.time.Instant.now());
-            transaction.setStatus(TransactionStatus.REJECTED_FRAUD);
-            transactionRepository.save(transaction);
-
-            log.info("Saga compensation completed for txnId: {}", context.referenceNo());
-
-        } catch (Exception e) {
-            log.error("Saga compensation failed: txnId={}, error={}",
-                    context.referenceNo(), e.getMessage(), e);
-            // Mark as failed - requires manual intervention
             saga.setSagaState(SagaState.FAILED);
-            saga.setErrorMessage("COMPENSATION_FAILED: " + e.getMessage());
-            saga.setCompletedAt(java.time.Instant.now());
+            saga.setErrorMessage(e.getMessage());
+            saga.setCompletedAt(Instant.now());
             sagaRepository.save(saga);
+
             transaction.setStatus(TransactionStatus.FAILED);
-            transaction.setRejectionReasons("COMPENSATION_FAILED: " + e.getMessage());
+            transaction.setRejectionReasons(e.getMessage());
             transactionRepository.save(transaction);
         }
     }
@@ -207,22 +175,23 @@ public class TransactionSagaOrchestrator {
                 .build();
 
         transactionProducer.publishInitiatedPayment(context.senderAccountNo(), event);
-        log.info("Submitted to fraud service: txnId={}, sagaId={}", context.referenceNo(), context.sagaId());
+        log.info("Submitted transaction to fraud detection service: txnId={}, sender={}, amount={}",
+                context.referenceNo(), context.senderAccountNo(), context.amount());
     }
 
     private void completeSaga(Transaction transaction, Saga saga) {
         transaction.setStatus(TransactionStatus.COMPLETED);
-        saga.setSagaState(SagaState.COMPLETED);
-        saga.setCompletedAt(java.time.Instant.now());
-        sagaRepository.save(saga);
         transaction.setBalanceAfter(calculateBalanceAfter(transaction));
         transactionRepository.save(transaction);
+
+        saga.setSagaState(SagaState.COMPLETED);
+        saga.setCompletedAt(Instant.now());
+        sagaRepository.save(saga);
+
         log.info("Saga completed successfully: txnId={}, sagaId={}", transaction.getReferenceNo(), saga.getId());
     }
 
     private BigDecimal calculateBalanceAfter(Transaction transaction) {
-        // For simplicity, return the transaction amount as balance after
-        // In reality, this would query the account service for actual balance
         return transaction.getAmount();
     }
 }

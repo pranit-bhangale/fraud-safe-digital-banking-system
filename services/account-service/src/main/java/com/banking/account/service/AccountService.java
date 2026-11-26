@@ -8,7 +8,7 @@ import jakarta.validation.Valid;
 
 public interface AccountService {
 
-    void createNewAccount(@Valid AccountCreationRequest request);
+    String createNewAccount(@Valid AccountCreationRequest request);
 
     AccountDetail fetchAccountDetail(String accountNo, int page, int size);
 

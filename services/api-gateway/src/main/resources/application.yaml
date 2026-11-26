@@ -1,3 +1,145 @@
+server:
+  port: 8080
+  tomcat:
+    threads:
+      max: 200
+      min-spare: 20
+    connection-timeout: 5000ms
+    max-connections: 10000
 spring:
   application:
     name: api-gateway
+  config:
+    import: "optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  # Enable Java Virtual Threads for ultra-high concurrency in Spring MVC
+  threads:
+    virtual:
+      enabled: true
+  # Redis Configuration for Distributed Rate Limiting
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:postgres}
+      timeout: 2000ms
+      jedis:
+        pool:
+          max-active: 32
+          max-idle: 16
+          min-idle: 4
+  # Spring Cloud Gateway Server WebMvc Routes
+  cloud:
+    gateway:
+      mvc:
+        routes:
+          # 1. User Service Route
+          - id: user-service-route
+            uri: lb://user-service
+            predicates:
+              - Path=/api/v1/auth/**, /api/v1/users/**
+            filters:
+              - CircuitBreaker=userServiceCircuitBreaker,forward:/fallback/user
+          # 2. Account Service Route
+          - id: account-service-route
+            uri: lb://account-service
+            predicates:
+              - Path=/api/accounts/**, /api/v1/accounts/**
+            filters:
+              - CircuitBreaker=accountServiceCircuitBreaker,forward:/fallback/account
+          # 3. Transaction Service Route
+          - id: transaction-service-route
+            uri: lb://transaction-service
+            predicates:
+              - Path=/api/v1/transactions/**
+            filters:
+              - CircuitBreaker=transactionServiceCircuitBreaker,forward:/fallback/transaction
+          # 4. Payment Service Route
+          - id: payment-service-route
+            uri: lb://payment-service
+            predicates:
+              - Path=/api/v1/payments/**, /api/v1/webhooks/**
+            filters:
+              - CircuitBreaker=paymentServiceCircuitBreaker,forward:/fallback/payment
+    # Spring Cloud LoadBalancer Configuration
+    loadbalancer:
+      ribbon:
+        enabled: false
+      cache:
+        enabled: true
+        ttl: 10s
+        capacity: 256
+      health-check:
+        initial-delay: 5s
+        interval: 10s
+
+# Resilience4j Circuit Breaker & Time Limiter Configuration for WebMvc
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        failure-rate-threshold: 50.0
+        slow-call-rate-threshold: 75.0
+        slow-call-duration-threshold: 3s
+        wait-duration-in-open-state: 15s
+        permitted-number-of-calls-in-half-open-state: 5
+        automatic-transition-from-open-to-half-open-enabled: true
+        register-health-indicator: true
+    instances:
+      userServiceCircuitBreaker:
+        base-config: default
+      accountServiceCircuitBreaker:
+        base-config: default
+      transactionServiceCircuitBreaker:
+        base-config: default
+      paymentServiceCircuitBreaker:
+        base-config: default
+  timelimiter:
+    configs:
+      default:
+        timeout-duration: 5s
+    instances:
+      userServiceCircuitBreaker:
+        base-config: default
+      accountServiceCircuitBreaker:
+        base-config: default
+      transactionServiceCircuitBreaker:
+        base-config: default
+      paymentServiceCircuitBreaker:
+        base-config: default
+
+# Eureka Discovery Client Configuration
+eureka:
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+  client:
+    fetch-registry: true
+    register-with-eureka: true
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, circuitbreakers
+  endpoint:
+    health:
+      show-details: when-authorized
+      probes:
+        enabled: true
+
+logging:
+  level:
+    root: INFO
+    org.springframework.cloud.gateway: INFO
+    org.springframework.cloud.loadbalancer: INFO
+    io.github.resilience4j: INFO
+    com.banking.gateway: DEBUG

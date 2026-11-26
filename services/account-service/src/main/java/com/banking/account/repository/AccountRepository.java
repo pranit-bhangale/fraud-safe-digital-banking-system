@@ -1,6 +1,7 @@
 package com.banking.account.repository;
 
 import com.banking.account.entity.Account;
+import com.banking.account.model.AccountType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -11,4 +12,8 @@ import java.util.UUID;
 public interface AccountRepository extends JpaRepository<Account, UUID> {
     
     Optional<Account> findByAccountNo(String accountNo);
+
+    boolean existsByAccountNo(String accountNo);
+
+    boolean existsByUserIdAndAccountType(UUID userId, AccountType accountType);
 }

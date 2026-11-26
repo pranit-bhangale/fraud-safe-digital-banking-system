@@ -18,6 +18,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.Map;
+
 @RestController
 @RequestMapping("/api/accounts")
 @RequiredArgsConstructor
@@ -27,9 +29,13 @@ public class AccountController {
     private final AccountService accountService;
 
     @PostMapping(version = "v1")
-    public ResponseEntity<String> createNewAccount(@Valid @RequestBody AccountCreationRequest request) {
-        this.accountService.createNewAccount(request);
-        return ResponseEntity.status(HttpStatus.CREATED).body("Account Created Successfully.");
+    public ResponseEntity<Map<String, Object>> createNewAccount(@Valid @RequestBody AccountCreationRequest request) {
+        String accountNo = this.accountService.createNewAccount(request);
+        return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
+                "success", true,
+                "message", "Account Created Successfully.",
+                "accountNo", accountNo
+        ));
     }
 
     @GetMapping(value = "/{accountNo}", version = "v1")
