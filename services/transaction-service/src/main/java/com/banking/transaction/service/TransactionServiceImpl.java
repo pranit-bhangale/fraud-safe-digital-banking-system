@@ -35,8 +35,6 @@ public class TransactionServiceImpl implements TransactionService {
     @Transactional
     public TransactionResponse createNewTransaction(TransactionRequest request) {
         validateRequest(request);
-
-        // Pre-flight balance check via declarative HTTP Interface
         try {
             AccountDto account = this.accountClient.getAccount(request.senderAccountNo());
             if (account != null) {
@@ -53,15 +51,12 @@ public class TransactionServiceImpl implements TransactionService {
         } catch (InsufficientFundsException | InvalidTransactionException ex) {
             throw ex;
         } catch (Exception ex) {
-            log.warn("Could not query account-service via HTTP Interface for {}: {}",
-                    request.senderAccountNo(), ex.getMessage());
+            log.warn("Could not query account-service via HTTP Interface for {}: {}", request.senderAccountNo(), ex.getMessage());
         }
-
         String referenceNo = generateReferenceNo();
         UUID userId = request.userId() != null ? request.userId() : UUID.randomUUID();
         TransactionType type = request.transactionType() != null ? request.transactionType() : TransactionType.TRANSFER;
         String accountType = request.accountType() != null && !request.accountType().isBlank() ? request.accountType() : "SAVINGS";
-
         Transaction transaction = Transaction.builder()
                 .userId(userId)
                 .referenceNo(referenceNo)
@@ -74,12 +69,9 @@ public class TransactionServiceImpl implements TransactionService {
                 .description(request.description())
                 .transactionDate(Instant.now())
                 .build();
-
         Transaction saved = this.transactionRepository.save(transaction);
         log.info("Transaction initiated: referenceNo: {} sender: {} amount: {}",
                 saved.getReferenceNo(), saved.getAccountNo(), saved.getAmount());
-
-        // Publish to fraud detection service via Kafka
         Event event = Event.builder()
                 .request(Event.PaymentRequest.builder()
                         .txnId(saved.getReferenceNo())
