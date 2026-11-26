@@ -5,12 +5,15 @@ import com.banking.user.dto.LoginRequest;
 import com.banking.user.dto.LoginResponse;
 import com.banking.user.dto.RegistrationRequest;
 import com.banking.user.dto.TokenResponse;
+import com.banking.user.entity.Role;
 import com.banking.user.entity.User;
 import com.banking.user.event.NotificationEvent;
 import com.banking.user.exception.InvalidRequestException;
 import com.banking.user.exception.UnauthorizedException;
+import com.banking.user.model.RoleType;
 import com.banking.user.model.UserDetail;
 import com.banking.user.publisher.EventPublisher;
+import com.banking.user.repository.RoleRepository;
 import com.banking.user.repository.UserRepository;
 import com.banking.user.security.context.SecurityContext;
 import com.banking.user.security.service.ExtractClaim;
@@ -44,6 +47,7 @@ public class AuthServiceImpl implements AuthService {
     private static final Duration CLOCK_SKEW_BUFFER = Duration.ofMinutes(1);
 
     private final UserRepository userRepository;
+    private final RoleRepository roleRepository;
     private final PasswordEncoder passwordEncoder;
     private final EventPublisher eventPublisher;
     private final AuthenticationManager authenticationManager;
@@ -60,12 +64,21 @@ public class AuthServiceImpl implements AuthService {
         if (this.userRepository.existsByEmail(request.email())) {
             throw new InvalidRequestException("Email is already in use");
         }
+        RoleType assignedRoleType = request.role() != null ? request.role() : RoleType.CUSTOMER;
+        Role userRole = this.roleRepository.findByName(assignedRoleType)
+                .orElseGet(() -> this.roleRepository.save(Role.builder()
+                        .id((short) (assignedRoleType == RoleType.ADMIN ? 1 : (assignedRoleType == RoleType.MANAGER ? 2 : 3)))
+                        .name(assignedRoleType)
+                        .description(assignedRoleType.name() + " role")
+                        .build()));
+
         User user = User.builder()
                 .username(request.username())
                 .password(this.passwordEncoder.encode(request.password()))
                 .email(request.email())
                 .firstName(request.firstName())
                 .lastName(request.lastName())
+                .roles(java.util.Set.of(userRole))
                 .build();
         user = this.userRepository.save(user);
         final Map<String, Object> data = Map.of(

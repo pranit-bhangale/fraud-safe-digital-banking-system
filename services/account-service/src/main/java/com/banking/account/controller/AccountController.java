@@ -9,6 +9,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,6 +30,7 @@ public class AccountController {
     private final AccountService accountService;
 
     @PostMapping(version = "v1")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'MANAGER', 'ADMIN')")
     public ResponseEntity<Map<String, Object>> createNewAccount(@Valid @RequestBody AccountCreationRequest request) {
         String accountNo = this.accountService.createNewAccount(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(Map.of(
@@ -39,6 +41,7 @@ public class AccountController {
     }
 
     @GetMapping(value = "/{accountNo}", version = "v1")
+    @PreAuthorize("hasAnyRole('CUSTOMER', 'MANAGER', 'ADMIN')")
     public ResponseEntity<AccountDetail> getAccountDetail(
             @PathVariable String accountNo,
             @RequestParam(defaultValue = "0") int page,
@@ -47,8 +50,9 @@ public class AccountController {
         return ResponseEntity.ok(this.accountService.fetchAccountDetail(accountNo, page, size));
     }
 
-    // Saga balance operations (internal APIs for transaction-service)
+    // Saga balance operations (restricted high-privilege internal balance operations)
     @PostMapping(value = "/{accountNo}/balance/reserve", version = "v1")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<BalanceOperationResponse> reserveBalance(
             @PathVariable String accountNo,
             @Valid @RequestBody BalanceOperationRequest request
@@ -57,6 +61,7 @@ public class AccountController {
     }
 
     @PostMapping(value = "/{accountNo}/balance/release", version = "v1")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<BalanceOperationResponse> releaseReservation(
             @PathVariable String accountNo,
             @Valid @RequestBody BalanceOperationRequest request
@@ -65,6 +70,7 @@ public class AccountController {
     }
 
     @PostMapping(value = "/{accountNo}/balance/debit", version = "v1")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<BalanceOperationResponse> debitBalance(
             @PathVariable String accountNo,
             @Valid @RequestBody BalanceOperationRequest request
@@ -73,6 +79,7 @@ public class AccountController {
     }
 
     @PostMapping(value = "/{accountNo}/balance/credit", version = "v1")
+    @PreAuthorize("hasAnyRole('ADMIN', 'MANAGER')")
     public ResponseEntity<BalanceOperationResponse> creditBalance(
             @PathVariable String accountNo,
             @Valid @RequestBody BalanceOperationRequest request

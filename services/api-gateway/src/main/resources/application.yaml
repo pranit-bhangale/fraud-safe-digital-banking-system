@@ -129,7 +129,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health, info, metrics, circuitbreakers
+        include: health, info, circuitbreakers
   endpoint:
     health:
       show-details: when-authorized

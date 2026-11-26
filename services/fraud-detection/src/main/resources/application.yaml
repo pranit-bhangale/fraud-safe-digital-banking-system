@@ -130,5 +130,5 @@ logging:
       clean-history-on-start: false
 
 server:
-  port: ${PORT:8888}
+  port: ${PORT:8084}
   shutdown: graceful

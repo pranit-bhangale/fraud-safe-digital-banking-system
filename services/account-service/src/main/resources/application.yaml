@@ -155,6 +155,7 @@ feign:
 grpc:
   client:
     transaction-service:
+      address: static://${TRANSACTION_GRPC_HOST:localhost}:${TRANSACTION_GRPC_PORT:9090}
       enableKeepAlive: true
       keepAliveWithoutCalls: true
       negotiationType: plaintext

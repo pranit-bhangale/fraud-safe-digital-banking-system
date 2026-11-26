@@ -45,7 +45,7 @@ spring:
     validate-on-migrate: true
     clean-disabled: true
     out-of-order: false
-    cloud:
+  cloud:
     function:
       definition: fraudAckConsumer
     stream:
@@ -154,5 +154,9 @@ logging:
       max-history: 30
       clean-history-on-start: false
 server:
-  port: ${PORT:8082}
+  port: ${PORT:8083}
   shutdown: graceful
+
+grpc:
+  server:
+    port: ${GRPC_PORT:9090}

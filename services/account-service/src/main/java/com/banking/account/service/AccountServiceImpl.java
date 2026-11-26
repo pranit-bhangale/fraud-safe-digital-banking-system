@@ -1,5 +1,6 @@
 package com.banking.account.service;
 
+import com.banking.account.client.TransactionGrpcClient;
 import com.banking.account.client.UserFeignClient;
 import com.banking.account.dto.AccountCreationRequest;
 import com.banking.account.dto.AccountDetail;
@@ -8,11 +9,13 @@ import com.banking.account.dto.BalanceOperationResponse;
 import com.banking.account.entity.Account;
 import com.banking.account.entity.ProcessedTransaction;
 import com.banking.account.exception.AccountException;
+import com.banking.account.exception.GrpcException;
 import com.banking.account.exception.ResourceNotFoundException;
 import com.banking.account.model.AccountStatus;
 import com.banking.account.model.BalanceOperationType;
 import com.banking.account.repository.AccountRepository;
 import com.banking.account.repository.ProcessedTransactionRepository;
+import com.banking.transaction.grpc.CreateInitialTransactionResponse;
 import jakarta.persistence.OptimisticLockException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -36,7 +39,7 @@ public class AccountServiceImpl implements AccountService {
     private static final SecureRandom RANDOM = new SecureRandom();
     private final AccountRepository repository;
     private final UserFeignClient userFeignClient;
-    // private final TransactionGrpcClient transactionGrpcClient;
+    private final TransactionGrpcClient transactionGrpcClient;
     private final ProcessedTransactionRepository processedTransactionRepository;
 
     @Override
@@ -82,16 +85,16 @@ public class AccountServiceImpl implements AccountService {
         account = this.repository.save(account);
 
         // Edge case 5: Record opening ledger transaction via gRPC in transaction-service
-//        CreateInitialTransactionResponse response;
-//        try {
-//            response = this.transactionGrpcClient.createInitialTransaction(account).join();
-//        } catch (CompletionException ex) {
-//            log.error("Failed to record initial transaction via gRPC: accountNo={}, error={}", account.getAccountNo(), ex.getCause().getMessage());
-//            throw new GrpcException("Transaction service unavailable for opening deposit registration");
-//        }
-//        if (!response.getSuccess()) {
-//            throw new GrpcException("Failed to record initial transaction: " + response.getMessage());
-//        }
+        CreateInitialTransactionResponse response;
+        try {
+            response = this.transactionGrpcClient.createInitialTransaction(account).join();
+        } catch (CompletionException ex) {
+            log.error("Failed to record initial transaction via gRPC: accountNo={}, error={}", account.getAccountNo(), ex.getCause().getMessage());
+            throw new GrpcException("Transaction service unavailable for opening deposit registration");
+        }
+        if (!response.getSuccess()) {
+            throw new GrpcException("Failed to record initial transaction: " + response.getMessage());
+        }
 
         // Activate account upon confirmed opening transaction
         account.setAccountStatus(AccountStatus.ACTIVE);
@@ -136,9 +139,9 @@ public class AccountServiceImpl implements AccountService {
         }
         AccountDetail.PaginatedTransactionHistory history;
         try {
-//            history = this.transactionGrpcClient
-//                    .getTransactionHistory(account.getUserId(), account.getAccountNo(), page, size)
-//                    .join();
+            history = this.transactionGrpcClient
+                    .getTransactionHistory(account.getUserId(), account.getAccountNo(), page, size)
+                    .join();
         } catch (CompletionException ex) {
             log.warn("Transaction service unavailable, returning empty history: accountNo={}, error={}",
                     accountNo, ex.getCause().getMessage());
@@ -152,7 +155,7 @@ public class AccountServiceImpl implements AccountService {
                         .type(account.getAccountType())
                         .status(account.getAccountStatus())
                         .balance(account.getBalance())
-                        //.history(history)
+                        .history(history)
                         .build())
                 .build();
     }

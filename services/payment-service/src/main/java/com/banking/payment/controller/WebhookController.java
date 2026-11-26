@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -30,6 +31,7 @@ public class WebhookController {
     private final WebhookService webhookService;
 
     @PostMapping("/subscriptions")
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
     public ResponseEntity<WebhookSubscriptionResponse> registerSubscription(
             @Valid @RequestBody WebhookSubscriptionRequest request) {
         log.info("Registering webhook endpoint for merchant={}", request.merchantId());
@@ -38,11 +40,13 @@ public class WebhookController {
     }
 
     @GetMapping("/subscriptions/merchant/{merchantId}")
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
     public ResponseEntity<List<WebhookSubscriptionResponse>> getSubscriptions(@PathVariable UUID merchantId) {
         return ResponseEntity.ok(webhookService.getSubscriptionsByMerchant(merchantId));
     }
 
     @GetMapping("/subscriptions/{subscriptionId}/deliveries")
+    @PreAuthorize("hasAnyRole('MANAGER', 'ADMIN')")
     public ResponseEntity<List<WebhookDelivery>> getDeliveries(@PathVariable UUID subscriptionId) {
         return ResponseEntity.ok(webhookService.getDeliveryHistory(subscriptionId));
     }

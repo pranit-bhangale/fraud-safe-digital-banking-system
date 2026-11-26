@@ -1,5 +1,6 @@
 package com.banking.user.dto;
 
+import com.banking.user.model.RoleType;
 import com.banking.utility.annotation.PasswordMatches;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
@@ -30,6 +31,13 @@ public record RegistrationRequest(
         String password,
 
         @NotBlank(message = "Confirm password is required")
-        String confirmPassword
+        String confirmPassword,
+
+        RoleType role
 ) {
+    public RegistrationRequest {
+        if (role == null) {
+            role = RoleType.CUSTOMER;
+        }
+    }
 }

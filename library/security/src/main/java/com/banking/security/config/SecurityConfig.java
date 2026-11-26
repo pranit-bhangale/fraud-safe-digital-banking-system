@@ -2,16 +2,20 @@ package com.banking.security.config;
 
 import com.banking.security.endpoints.PublicEndpointProvider;
 import com.banking.security.filter.CorrelationIdFilter;
+import jakarta.servlet.http.HttpServletResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.Customizer;
+import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.userdetails.UserDetailsService;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
@@ -23,7 +27,7 @@ import java.util.Set;
 @Slf4j
 @Configuration(proxyBeanMethods = false)
 @EnableWebSecurity
-@EnableMethodSecurity
+@EnableMethodSecurity(prePostEnabled = true)
 public class SecurityConfig {
 
     private static final String[] DEFAULT_PUBLIC_ENDPOINTS = {
@@ -37,13 +41,33 @@ public class SecurityConfig {
             "/error"
     };
 
+    /**
+     * Stateless fallback UserDetailsService to prevent UserDetailsServiceAutoConfiguration
+     * from auto-generating random in-memory user passwords.
+     */
+    @Bean
+    @ConditionalOnMissingBean(UserDetailsService.class)
+    public UserDetailsService userDetailsService() {
+        return username -> {
+            throw new UsernameNotFoundException("Stateless OAuth2 Resource Server: User lookup not supported on client microservices");
+        };
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(PublicEndpointProvider.class)
+    public PublicEndpointProvider defaultPublicEndpointProvider() {
+        return () -> new String[0];
+    }
+
     @Bean
     @ConditionalOnMissingBean(SecurityFilterChain.class)
-    SecurityFilterChain filterChain(
+    public SecurityFilterChain filterChain(
             final HttpSecurity http,
             final List<PublicEndpointProvider> publicEndpointProviders,
-            final CorrelationIdFilter correlationIdFilter) {
-        log.info("Library Security Configuration: Initializing SecurityFilterChain");
+            final CorrelationIdFilter correlationIdFilter,
+            final JwtAuthenticationConverter jwtAuthenticationConverter) throws Exception {
+        log.info("Library Security Configuration: Initializing Resource Server SecurityFilterChain with RBAC");
+
         final Set<String> allEndpoints = new LinkedHashSet<>(Arrays.asList(DEFAULT_PUBLIC_ENDPOINTS));
         if (publicEndpointProviders != null) {
             for (final PublicEndpointProvider provider : publicEndpointProviders) {
@@ -56,6 +80,7 @@ public class SecurityConfig {
             }
         }
         final String[] endpointsArray = allEndpoints.toArray(String[]::new);
+
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(AbstractHttpConfigurer::disable)
@@ -66,13 +91,26 @@ public class SecurityConfig {
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(request -> request
-                        .requestMatchers(endpointsArray)
-                        .permitAll()
-                        .anyRequest()
-                        .authenticated())
+                        .requestMatchers(endpointsArray).permitAll()
+                        .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
-                        .jwt(Customizer.withDefaults()))
+                        .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter))
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                            response.getWriter().write("""
+                                    {"status":401,"error":"Unauthorized","message":"Full authentication is required to access this banking resource"}
+                                    """);
+                        })
+                        .accessDeniedHandler((request, response, accessDeniedException) -> {
+                            response.setStatus(HttpServletResponse.SC_FORBIDDEN);
+                            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+                            response.getWriter().write("""
+                                    {"status":403,"error":"Forbidden","message":"Access denied: Insufficient role permissions"}
+                                    """);
+                        }))
                 .addFilterBefore(correlationIdFilter, UsernamePasswordAuthenticationFilter.class);
+
         return http.build();
     }
 }

@@ -60,7 +60,7 @@ security:
     expiration: 900
   token:
     issuer: bank
-    # Keys Configuration
+  # Keys Configuration
   keys:
     privateKeyPath: ${PRIVATE_KEY_PATH:key/private_key.pem}
     publicKeyPath: ${PUBLIC_KEY_PATH:key/public_key.pem}

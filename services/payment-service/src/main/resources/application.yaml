@@ -1,5 +1,6 @@
 server:
-  port: 8085
+  port: ${PORT:8085}
+  shutdown: graceful
 
 spring:
   application:
@@ -8,6 +9,11 @@ spring:
     import: "optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
   lifecycle:
     timeout-per-shutdown-phase: 30s
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          public-key-location: ${PUBLIC_KEY_PATH:key/public_key.pem}
   # Database Configuration
   datasource:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:payment_db}
@@ -55,4 +61,4 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics
+        include: health,info
