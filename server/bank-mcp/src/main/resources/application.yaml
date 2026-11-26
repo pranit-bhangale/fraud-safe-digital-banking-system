@@ -1,0 +1,67 @@
+spring:
+  application:
+    name: bank-mcp
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  threads:
+    virtual:
+      enabled: true
+  ai:
+    mcp:
+      server:
+        enabled: true
+        name: bank-mcp-server
+        version: 1.0.0
+        protocol: STREAMABLE
+        type: SYNC
+        instructions: Banking helpdesk MCP server. Exposes read-only account and service-information tools.
+        request-timeout: 20s
+        streamable-http:
+          mcp-endpoint: /mcp
+          keep-alive-interval: 30s
+          disallow-delete: true
+        capabilities:
+          tool: true
+          resource: true
+          prompt: true
+          completion: true
+        tool-change-notification: false
+        prompt-change-notification: false
+        resource-change-notification: false
+        annotation-scanner:
+          enabled: true
+server:
+  port: 9999
+  shutdown: graceful
+  forward-headers-strategy: framework
+  compression:
+    enabled: false
+  tomcat:
+    connection-timeout: 20s
+    keep-alive-timeout: 60s
+    max-keep-alive-requests: 1000
+    threads:
+      max: 200
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      show-details: never
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+
+logging:
+  level:
+    root: INFO
+    com.banking: INFO
+    io.modelcontextprotocol: WARN
+  pattern:
+    correlation: "[%X{traceId:-},%X{spanId:-}] "
