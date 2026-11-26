@@ -13,6 +13,7 @@ import com.banking.transaction.model.TransactionStatus;
 import com.banking.transaction.model.TransactionType;
 import com.banking.transaction.producer.TransactionProducer;
 import com.banking.transaction.repository.TransactionRepository;
+import com.banking.transaction.saga.TransactionSagaOrchestrator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -30,6 +31,7 @@ public class TransactionServiceImpl implements TransactionService {
     private final TransactionRepository transactionRepository;
     private final TransactionProducer transactionProducer;
     private final AccountClient accountClient;
+    private final TransactionSagaOrchestrator sagaOrchestrator;
 
     @Override
     @Transactional
@@ -41,12 +43,7 @@ public class TransactionServiceImpl implements TransactionService {
                 if ("BLOCKED".equalsIgnoreCase(account.status()) || "SUSPENDED".equalsIgnoreCase(account.status())) {
                     throw new InvalidTransactionException("Sender account is not active: " + account.status());
                 }
-                if (account.balance() != null && account.balance().compareTo(request.amount()) < 0) {
-                    throw new InsufficientFundsException(
-                            String.format("Insufficient funds. Available: %s, Requested: %s",
-                                    account.balance(), request.amount())
-                    );
-                }
+                // Note: Balance check is now done during saga reserve step
             }
         } catch (InsufficientFundsException | InvalidTransactionException ex) {
             throw ex;
@@ -72,18 +69,11 @@ public class TransactionServiceImpl implements TransactionService {
         Transaction saved = this.transactionRepository.save(transaction);
         log.info("Transaction initiated: referenceNo: {} sender: {} amount: {}",
                 saved.getReferenceNo(), saved.getAccountNo(), saved.getAmount());
-        Event event = Event.builder()
-                .request(Event.PaymentRequest.builder()
-                        .txnId(saved.getReferenceNo())
-                        .senderAccountNo(saved.getAccountNo())
-                        .receiverAccountNo(saved.getReceiverAccountNo() != null ? saved.getReceiverAccountNo() : "N/A")
-                        .amount(saved.getAmount())
-                        .accountType(saved.getAccountType())
-                        .createdAtMs(System.currentTimeMillis())
-                        .build())
-                .build();
-        this.transactionProducer.publishInitiatedPayment(saved.getAccountNo(), event);
-        return mapToResponse(saved, "Transaction initiated and queued for fraud evaluation");
+
+        // Start saga orchestration (reserves balance, submits to fraud)
+        this.sagaOrchestrator.startSaga(saved);
+
+        return mapToResponse(saved, "Transaction initiated, balance reserved, fraud check in progress");
     }
 
     @Override

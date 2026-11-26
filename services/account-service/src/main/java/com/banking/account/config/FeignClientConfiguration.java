@@ -1,5 +1,6 @@
 package com.banking.account.config;
 
+import feign.Logger;
 import feign.RequestInterceptor;
 import jakarta.ws.rs.core.HttpHeaders;
 import org.springframework.context.annotation.Bean;
@@ -21,5 +22,10 @@ public class FeignClientConfiguration {
                 }
             }
         };
+    }
+
+    @Bean
+    public Logger.Level feignLoggerLevel() {
+        return Logger.Level.BASIC;
     }
 }

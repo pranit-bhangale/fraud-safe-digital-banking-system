@@ -9,6 +9,9 @@ import com.banking.transaction.grpc.GetUserTransactionHistoryRequest;
 import com.banking.transaction.grpc.TransactionInformation;
 import com.banking.transaction.grpc.TransactionServiceGrpc;
 import com.google.protobuf.Timestamp;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
+import io.github.resilience4j.timelimiter.annotation.TimeLimiter;
 import io.grpc.StatusRuntimeException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.grpc.client.GrpcChannelFactory;
@@ -18,6 +21,7 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 @Slf4j
@@ -29,8 +33,7 @@ public class TransactionGrpcClient {
     private final TransactionServiceGrpc.TransactionServiceBlockingStub stub;
 
     public TransactionGrpcClient(GrpcChannelFactory factory) {
-        this.stub = TransactionServiceGrpc.newBlockingStub(
-                factory.createChannel("transaction-service"));
+        this.stub = TransactionServiceGrpc.newBlockingStub(factory.createChannel("transaction-service"));
     }
 
     private static Timestamp toTimestamp(Instant instant) {
@@ -44,52 +47,79 @@ public class TransactionGrpcClient {
         return Instant.ofEpochSecond(timestamp.getSeconds(), timestamp.getNanos());
     }
 
-    public CreateInitialTransactionResponse createInitialTransaction(Account account) {
-        CreateInitialTransactionRequest request = CreateInitialTransactionRequest.newBuilder()
-                .setUserId(account.getUserId().toString())
-                .setAccountId(account.getId().toString())
-                .setAccountNo(account.getAccountNo())
-                .setAccountType(account.getAccountType().name())
-                .setBalance(account.getBalance().toPlainString())
-                .setDescription("Initial account opening")
-                .setTransactionDate(toTimestamp(Instant.now()))
-                .build();
-        try {
-            return stubWithDeadline().createInitialTransaction(request);
-        } catch (StatusRuntimeException e) {
-            log.error("createInitialTransaction failed: {}", e.getStatus(), e);
-            throw new GrpcException("Failed to create initial transaction" + e);
-        }
+    @CircuitBreaker(name = "transactionService", fallbackMethod = "createInitialTransactionFallback")
+    @Retry(name = "transactionService")
+    @TimeLimiter(name = "transactionService")
+    public CompletableFuture<CreateInitialTransactionResponse> createInitialTransaction(Account account) {
+        return CompletableFuture.supplyAsync(() -> {
+            CreateInitialTransactionRequest request = CreateInitialTransactionRequest.newBuilder()
+                    .setUserId(account.getUserId().toString())
+                    .setAccountId(account.getId().toString())
+                    .setAccountNo(account.getAccountNo())
+                    .setAccountType(account.getAccountType().name())
+                    .setBalance(account.getBalance().toPlainString())
+                    .setDescription("Initial account opening")
+                    .setTransactionDate(toTimestamp(Instant.now()))
+                    .build();
+            try {
+                return stubWithDeadline().createInitialTransaction(request);
+            } catch (StatusRuntimeException e) {
+                log.error("createInitialTransaction failed: {}", e.getStatus(), e);
+                throw new GrpcException("Failed to create initial transaction" + e);
+            }
+        });
     }
 
-    public AccountDetail.PaginatedTransactionHistory getTransactionHistory
+    @CircuitBreaker(name = "transactionService", fallbackMethod = "getTransactionHistoryFallback")
+    @Retry(name = "transactionService")
+    @TimeLimiter(name = "transactionService")
+    public CompletableFuture<AccountDetail.PaginatedTransactionHistory> getTransactionHistory
             (UUID userId, String accountNo, int page, int size) {
-        GetUserTransactionHistoryRequest request = GetUserTransactionHistoryRequest.newBuilder()
-                .setUserId(userId.toString())
-                .setAccountNo(accountNo)
-                .setPage(page)
-                .setSize(size)
-                .build();
-        try {
-            var response = stubWithDeadline().getUserTransactionHistory(request);
-            List<AccountDetail.TransactionHistory> transactions = response
-                    .getTransactionsList()
-                    .stream()
-                    .map(this::toHistory)
-                    .toList();
-            return AccountDetail.PaginatedTransactionHistory.builder()
-                    .transactions(transactions)
-                    .page(response.getPage())
-                    .size(response.getSize())
-                    .totalElements(response.getTotalElements())
-                    .totalPages(response.getTotalPages())
-                    .hasNext(response.getHasNext())
-                    .hasPrevious(response.getHasPrevious())
+        return CompletableFuture.supplyAsync(() -> {
+            GetUserTransactionHistoryRequest request = GetUserTransactionHistoryRequest.newBuilder()
+                    .setUserId(userId.toString())
+                    .setAccountNo(accountNo)
+                    .setPage(page)
+                    .setSize(size)
                     .build();
-        } catch (StatusRuntimeException e) {
-            log.error("UserTransactionHistory failed: {}", e.getStatus(), e);
-            throw new GrpcException("Failed to fetch transaction history" + e);
-        }
+            try {
+                var response = stubWithDeadline().getUserTransactionHistory(request);
+                List<AccountDetail.TransactionHistory> transactions = response
+                        .getTransactionsList()
+                        .stream()
+                        .map(this::toHistory)
+                        .toList();
+                return AccountDetail.PaginatedTransactionHistory.builder()
+                        .transactions(transactions)
+                        .page(response.getPage())
+                        .size(response.getSize())
+                        .totalElements(response.getTotalElements())
+                        .totalPages(response.getTotalPages())
+                        .hasNext(response.getHasNext())
+                        .hasPrevious(response.getHasPrevious())
+                        .build();
+            } catch (StatusRuntimeException e) {
+                log.error("UserTransactionHistory failed: {}", e.getStatus(), e);
+                throw new GrpcException("Failed to fetch transaction history" + e);
+            }
+        });
+    }
+
+    private CompletableFuture<CreateInitialTransactionResponse> createInitialTransactionFallback(Account account, Exception ex) {
+        log.warn("Circuit breaker fallback for createInitialTransaction: accountNo={}, error={}", account.getAccountNo(), ex.getMessage());
+        return CompletableFuture.completedFuture(
+                CreateInitialTransactionResponse.newBuilder()
+                        .setSuccess(false)
+                        .setMessage("Transaction service unavailable: " + ex.getMessage())
+                        .build()
+        );
+    }
+
+    private CompletableFuture<AccountDetail.PaginatedTransactionHistory> getTransactionHistoryFallback(UUID userId, String accountNo, int page, int size, Exception ex) {
+        log.warn("Circuit breaker fallback for getTransactionHistory: userId={}, accountNo={}, error={}", userId, accountNo, ex.getMessage());
+        return CompletableFuture.completedFuture(
+                AccountDetail.PaginatedTransactionHistory.empty(page, size)
+        );
     }
 
     private AccountDetail.TransactionHistory toHistory(TransactionInformation t) {

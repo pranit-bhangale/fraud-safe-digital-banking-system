@@ -15,6 +15,11 @@ CREATE TABLE IF NOT EXISTS transactions
     description         VARCHAR(500),
     transaction_date    TIMESTAMP WITH TIME ZONE NOT NULL,
 
+    -- Saga fields
+    saga_id             UUID,
+    saga_step           INT                      DEFAULT 0,
+    saga_state          VARCHAR(30),
+
     -- Audit fields
     created_at          TIMESTAMP WITH TIME ZONE NOT NULL,
     updated_at          TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -101,6 +106,13 @@ CREATE INDEX IF NOT EXISTS idx_transactions_user_date
 CREATE INDEX IF NOT EXISTS idx_transactions_account_date
     ON transactions(account_no, transaction_date DESC);
 
+-- Saga indexes
+CREATE INDEX IF NOT EXISTS idx_transactions_saga_id
+    ON transactions(saga_id);
+
+CREATE INDEX IF NOT EXISTS idx_transactions_saga_state
+    ON transactions(saga_state);
+
 -- Table documentation
 COMMENT ON TABLE transactions
     IS 'Stores financial transactions performed on customer bank accounts';
@@ -143,6 +155,15 @@ COMMENT ON COLUMN transactions.rejection_reasons
 
 COMMENT ON COLUMN transactions.description
     IS 'Optional description of the transaction';
+
+COMMENT ON COLUMN transactions.saga_id
+    IS 'Saga correlation ID for distributed transaction tracking';
+
+COMMENT ON COLUMN transactions.saga_step
+    IS 'Current step in the saga execution';
+
+COMMENT ON COLUMN transactions.saga_state
+    IS 'Current saga state: STARTED, RESERVED, FRAUD_CHECK, BALANCE_UPDATED, COMPLETED, COMPENSATING, ROLLED_BACK, FAILED';
 
 COMMENT ON COLUMN transactions.transaction_date
     IS 'Date and time when the transaction occurred';

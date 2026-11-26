@@ -4,6 +4,7 @@ import com.banking.transaction.entity.Transaction;
 import com.banking.transaction.event.Event;
 import com.banking.transaction.model.TransactionStatus;
 import com.banking.transaction.repository.TransactionRepository;
+import com.banking.transaction.saga.TransactionSagaOrchestrator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
@@ -22,6 +23,7 @@ public class TransactionFraudAckConsumer {
     public static final String HEADER_TXN_ID = "X-Txn-Id";
 
     private final TransactionRepository transactionRepository;
+    private final TransactionSagaOrchestrator sagaOrchestrator;
 
     @Bean
     public Consumer<Message<Event>> fraudAckConsumer() {
@@ -45,9 +47,9 @@ public class TransactionFraudAckConsumer {
                 return;
             }
             if (event.approved() != null) {
-                handleApproved(transaction, event.approved());
+                this.sagaOrchestrator.handleFraudApproved(event.approved());
             } else if (event.event() != null) {
-                handleFraudRejected(transaction, event.event());
+                this.sagaOrchestrator.handleFraudRejected(event.event());
             } else {
                 handleUnknownOrError(transaction, message);
             }
@@ -65,35 +67,9 @@ public class TransactionFraudAckConsumer {
         return headerTxnId != null ? headerTxnId.toString() : null;
     }
 
-    private void handleApproved(Transaction transaction, Event.PaymentApproved approved) {
-        transaction.setStatus(TransactionStatus.COMPLETED);
-        transaction.setFraudScore(approved.riskScore());
-        this.transactionRepository.save(transaction);
-        log.info("Transaction approved and completed: txnId: {} sender: {} amount: {}",
-                transaction.getReferenceNo(), transaction.getAccountNo(), transaction.getAmount());
-    }
-
-    private void handleFraudRejected(Transaction transaction, Event.FraudEvent fraud) {
-        transaction.setStatus(TransactionStatus.REJECTED_FRAUD);
-        transaction.setFraudScore(fraud.riskScore());
-        String reasons = fraud.reasons() != null ? String.join(", ", fraud.reasons()) : "BLOCKED_BY_FRAUD";
-        transaction.setRejectionReasons(reasons);
-        this.transactionRepository.save(transaction);
-        log.warn("Transaction rejected due to fraud detection: txnId: {} sender: {} score: {} reasons: {}",
-                transaction.getReferenceNo(), transaction.getAccountNo(), fraud.riskScore(), reasons);
-    }
-
     private void handleUnknownOrError(Transaction transaction, Message<Event> message) {
         String fraudStatus = String.valueOf(message.getHeaders().get(HEADER_FRAUD_STATUS));
-        if ("ERROR".equalsIgnoreCase(fraudStatus)) {
-            transaction.setStatus(TransactionStatus.FAILED);
-            transaction.setRejectionReasons("FRAUD_CHECK_ERROR");
-        } else {
-            transaction.setStatus(TransactionStatus.FAILED);
-            transaction.setRejectionReasons("UNKNOWN_EVALUATION_RESULT");
-        }
-        this.transactionRepository.save(transaction);
-        log.error("Transaction failed during security evaluation: txnId: {} status: {}",
-                transaction.getReferenceNo(), transaction.getStatus());
+        String errorReason = "ERROR".equalsIgnoreCase(fraudStatus) ? "FRAUD_CHECK_ERROR" : "UNKNOWN_EVALUATION_RESULT";
+        this.sagaOrchestrator.handleFraudError(transaction.getReferenceNo(), errorReason);
     }
 }
