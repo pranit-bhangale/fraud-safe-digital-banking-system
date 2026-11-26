@@ -1,15 +1,33 @@
 package com.banking.account.service;
 
+import com.banking.account.client.TransactionGrpcClient;
+import com.banking.account.client.UserFeignClient;
 import com.banking.account.dto.AccountCreationRequest;
 import com.banking.account.dto.AccountDetail;
+import com.banking.account.dto.BalanceOperationRequest;
+import com.banking.account.dto.BalanceOperationResponse;
+import com.banking.account.entity.Account;
+import com.banking.account.entity.ProcessedTransaction;
+import com.banking.account.exception.GrpcException;
+import com.banking.account.exception.ResourceNotFoundException;
+import com.banking.account.model.AccountStatus;
+import com.banking.account.model.BalanceOperationType;
 import com.banking.account.repository.AccountRepository;
+import com.banking.account.repository.ProcessedTransactionRepository;
+import com.banking.transaction.grpc.CreateInitialTransactionResponse;
+import jakarta.persistence.OptimisticLockException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.OptimisticLockingFailureException;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Retryable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.security.SecureRandom;
+import java.util.concurrent.CompletionException;
 
 @Slf4j
 @Service
@@ -18,25 +36,216 @@ public class AccountServiceImpl implements AccountService {
 
     private static final SecureRandom RANDOM = new SecureRandom();
     private final AccountRepository repository;
+    private final UserFeignClient userFeignClient;
+    private final TransactionGrpcClient transactionGrpcClient;
+    private final ProcessedTransactionRepository processedTransactionRepository;
 
-    public static String generate() {
-        return String.format
-                ("%010d", RANDOM.nextLong(1_000_000_000L, 10_000_000_000L));
+    public static String generateAccountNumber() {
+        int length = RANDOM.nextInt(12, 17);
+        long min = (long) Math.pow(10, length - 1);
+        long max = (long) Math.pow(10, length);
+        return String.valueOf(RANDOM.nextLong(min, max));
     }
 
     @Override
     @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
     public void createNewAccount(AccountCreationRequest request) {
-        // Check User exists through feign Client
-        // if exists Create Account for User
-        // Through gRPC update initial Transaction history
+        boolean userExists;
+        try {
+            userExists = this.userFeignClient.existsByUserId(request.userId()).join();
+        } catch (CompletionException ex) {
+            log.error("Failed to verify user existence: userId={}, error={}", request.userId(), ex.getCause().getMessage());
+            throw new ResourceNotFoundException("User service unavailable: " + request.userId());
+        }
+        if (!userExists) {
+            throw new ResourceNotFoundException("User not found: " + request.userId());
+        }
+        Account account = Account.builder()
+                .accountNo(generateAccountNumber())
+                .userId(request.userId())
+                .accountType(request.type())
+                .accountStatus(AccountStatus.ACTIVE)
+                .balance(request.balance())
+                .build();
+        account = this.repository.save(account);
+        CreateInitialTransactionResponse response;
+        try {
+            response = this.transactionGrpcClient.createInitialTransaction(account).join();
+        } catch (CompletionException ex) {
+            log.error("Failed to create initial transaction: accountNo={}, error={}", account.getAccountNo(), ex.getCause().getMessage());
+            throw new GrpcException("Transaction service unavailable");
+        }
+        if (!response.getSuccess()) {
+            throw new GrpcException("Failed to create initial transaction: " + response.getMessage());
+        }
     }
 
     @Override
-    public AccountDetail fetchAccountDetail(String accountNo) {
-        // Fetch Account Detail
-        // Fetch User Detail through feign Client
-        // Fetch Transaction thorugh gRPC Unary Mode
-        return null;
+    @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class, readOnly = true)
+    public AccountDetail fetchAccountDetail(String accountNo, int page, int size) {
+        Account account = this.repository.findByAccountNo(accountNo)
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found: " + accountNo));
+        AccountDetail.UserInformation user;
+        try {
+            user = this.userFeignClient.getUserById(account.getUserId()).join();
+        } catch (CompletionException ex) {
+            log.warn("User service unavailable, proceeding without user info: userId={}, error={}",
+                    account.getUserId(), ex.getCause().getMessage());
+            user = null;
+        }
+        AccountDetail.PaginatedTransactionHistory history;
+        try {
+            history = this.transactionGrpcClient
+                    .getTransactionHistory(account.getUserId(), account.getAccountNo(), page, size)
+                    .join();
+        } catch (CompletionException ex) {
+            log.warn("Transaction service unavailable, returning empty history: accountNo={}, error={}",
+                    accountNo, ex.getCause().getMessage());
+            history = AccountDetail.PaginatedTransactionHistory.empty(page, size);
+        }
+        return AccountDetail.builder()
+                .user(user)
+                .account(AccountDetail.AccountInformation.builder()
+                        .id(account.getId())
+                        .accountNo(account.getAccountNo())
+                        .type(account.getAccountType())
+                        .status(account.getAccountStatus())
+                        .balance(account.getBalance())
+                        .history(history)
+                        .build())
+                .build();
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
+    @Retryable(retryFor = {OptimisticLockingFailureException.class, OptimisticLockException.class}, maxAttempts = 3, backoff = @Backoff(delay = 50))
+    public BalanceOperationResponse reserveBalance(String accountNo, BalanceOperationRequest request) {
+        return executeBalanceOperation(accountNo, request, BalanceOperationType.RESERVE);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
+    @Retryable(retryFor = {OptimisticLockingFailureException.class, OptimisticLockException.class}, maxAttempts = 3, backoff = @Backoff(delay = 50))
+    public BalanceOperationResponse releaseReservation(String accountNo, BalanceOperationRequest request) {
+        return executeBalanceOperation(accountNo, request, BalanceOperationType.RELEASE);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
+    @Retryable(retryFor = {OptimisticLockingFailureException.class, OptimisticLockException.class}, maxAttempts = 3, backoff = @Backoff(delay = 50))
+    public BalanceOperationResponse debitBalance(String accountNo, BalanceOperationRequest request) {
+        return executeBalanceOperation(accountNo, request, BalanceOperationType.DEBIT);
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRED, rollbackFor = Exception.class)
+    @Retryable(retryFor = {OptimisticLockingFailureException.class, OptimisticLockException.class}, maxAttempts = 3, backoff = @Backoff(delay = 50))
+    public BalanceOperationResponse creditBalance(String accountNo, BalanceOperationRequest request) {
+        return executeBalanceOperation(accountNo, request, BalanceOperationType.CREDIT);
+    }
+
+    private BalanceOperationResponse executeBalanceOperation(String accountNo, BalanceOperationRequest request, BalanceOperationType type) {
+        String operationType = type.name();
+        if (processedTransactionRepository.existsByTransactionIdAndSagaIdAndOperationType(
+                request.transactionId(), request.sagaId(), type)) {
+            var existing = processedTransactionRepository
+                    .findByTransactionIdAndSagaIdAndOperationType(request.transactionId(), request.sagaId(), type)
+                    .orElseThrow();
+            log.info("Idempotent replay for {}: txnId={}, sagaId={}, returning cached result: {}",
+                    operationType, request.transactionId(), request.sagaId(), existing.getResultStatus());
+            return existing.getResultStatus().equals("SUCCESS")
+                    ? BalanceOperationResponse.success(
+                    request.transactionId(), request.sagaId(), accountNo,
+                    existing.getAmount(), existing.getAmount(), BigDecimal.ZERO, existing.getResultMessage())
+                    : BalanceOperationResponse.failure(
+                    request.transactionId(), request.sagaId(), accountNo,
+                    BigDecimal.ZERO, BigDecimal.ZERO, existing.getResultMessage());
+        }
+
+        Account account = this.repository.findByAccountNo(accountNo)
+                .orElseThrow(() -> new ResourceNotFoundException("Account not found: " + accountNo));
+
+        if (account.getAccountStatus() != AccountStatus.ACTIVE) {
+            return recordAndReturnFailure(request, accountNo, type,
+                    account.getBalance(), account.getReservedBalance(),
+                    "Account not active: " + account.getAccountStatus());
+        }
+
+        BigDecimal previousBalance = account.getBalance();
+        BigDecimal previousReserved = account.getReservedBalance();
+        String message;
+        try {
+            switch (type) {
+                case RESERVE -> {
+                    if (!account.canReserve(request.amount())) {
+                        throw new IllegalStateException("Insufficient available balance");
+                    }
+                    account.setReservedBalance(account.getReservedBalance().add(request.amount()));
+                    message = "Balance reserved for transaction";
+                }
+                case RELEASE -> {
+                    if (account.getReservedBalance().compareTo(request.amount()) < 0) {
+                        throw new IllegalStateException("Reservation amount exceeds reserved balance");
+                    }
+                    account.setReservedBalance(account.getReservedBalance().subtract(request.amount()));
+                    message = "Balance reservation released";
+                }
+                case DEBIT -> {
+                    if (account.getReservedBalance().compareTo(request.amount()) < 0) {
+                        throw new IllegalStateException("Insufficient reserved balance for debit");
+                    }
+                    account.setBalance(account.getBalance().subtract(request.amount()));
+                    account.setReservedBalance(account.getReservedBalance().subtract(request.amount()));
+                    message = "Balance debited";
+                }
+                case CREDIT -> {
+                    account.setBalance(account.getBalance().add(request.amount()));
+                    message = "Balance credited";
+                }
+                default -> throw new IllegalArgumentException("Unknown operation type: " + type);
+            }
+
+            Account saved = this.repository.save(account);
+            log.info("Balance operation {} for account {}: txnId={}, sagaId={}, amount={}, newBalance={}, reserved={}",
+                    type, accountNo, request.transactionId(), request.sagaId(), request.amount(),
+                    saved.getBalance(), saved.getReservedBalance());
+
+            recordProcessedTransaction(request, accountNo, type, "SUCCESS", message, saved.getBalance(), saved.getReservedBalance());
+
+            return BalanceOperationResponse.success(
+                    request.transactionId(), request.sagaId(), accountNo,
+                    previousBalance, saved.getBalance(), saved.getReservedBalance(), message);
+
+        } catch (Exception e) {
+            log.warn("Balance operation {} failed: txnId={}, sagaId={}, error={}",
+                    type, request.transactionId(), request.sagaId(), e.getMessage());
+            return recordAndReturnFailure(request, accountNo, type,
+                    previousBalance, previousReserved, e.getMessage());
+        }
+    }
+
+    private BalanceOperationResponse recordAndReturnFailure(BalanceOperationRequest request, String accountNo,
+                                                            BalanceOperationType operationType, BigDecimal balance,
+                                                            BigDecimal reservedBalance, String message) {
+        recordProcessedTransaction(request, accountNo, operationType, "FAILURE", message, balance, reservedBalance);
+        return BalanceOperationResponse.failure(
+                request.transactionId(), request.sagaId(), accountNo,
+                balance, reservedBalance, message);
+    }
+
+    private void recordProcessedTransaction(BalanceOperationRequest request, String accountNo,
+                                            BalanceOperationType operationType, String resultStatus, String message,
+                                            BigDecimal balance, BigDecimal reservedBalance) {
+        ProcessedTransaction processed = ProcessedTransaction.builder()
+                .id(java.util.UUID.randomUUID())
+                .transactionId(request.transactionId())
+                .sagaId(request.sagaId())
+                .accountNo(accountNo)
+                .operationType(operationType)
+                .amount(request.amount())
+                .resultStatus(resultStatus)
+                .resultMessage(message)
+                .build();
+        processedTransactionRepository.save(processed);
     }
 }

@@ -1,19 +1,20 @@
 
 CREATE TABLE IF NOT EXISTS accounts
 (
-    id             UUID           NOT NULL,
-    account_no     VARCHAR(20)    NOT NULL,
-    user_id        UUID           NOT NULL,
-    account_type   VARCHAR(20)    NOT NULL,
-    account_status VARCHAR(20)    NOT NULL,
-    balance        NUMERIC(19, 2) NOT NULL DEFAULT 0.00,
+    id               UUID           NOT NULL,
+    account_no       VARCHAR(20)    NOT NULL,
+    user_id          UUID           NOT NULL,
+    account_type     VARCHAR(20)    NOT NULL,
+    account_status   VARCHAR(20)    NOT NULL,
+    balance          NUMERIC(19, 2) NOT NULL DEFAULT 0.00,
+    reserved_balance NUMERIC(19, 2) NOT NULL DEFAULT 0.00,
 
     -- Audit fields
-    created_at     TIMESTAMP WITH TIME ZONE NOT NULL,
-    updated_at     TIMESTAMP WITH TIME ZONE NOT NULL,
-    created_by     UUID,
-    updated_by     UUID,
-    version        BIGINT         NOT NULL DEFAULT 0,
+    created_at       TIMESTAMP WITH TIME ZONE NOT NULL,
+    updated_at       TIMESTAMP WITH TIME ZONE NOT NULL,
+    created_by       UUID,
+    updated_by       UUID,
+    version          BIGINT         NOT NULL DEFAULT 0,
 
     CONSTRAINT pk_accounts
         PRIMARY KEY (id),
@@ -45,6 +46,12 @@ CREATE TABLE IF NOT EXISTS accounts
 
     CONSTRAINT ck_accounts_balance_non_negative
         CHECK (balance >= 0),
+
+    CONSTRAINT ck_accounts_reserved_balance_non_negative
+        CHECK (reserved_balance >= 0),
+
+    CONSTRAINT ck_accounts_available_balance_non_negative
+        CHECK (balance - reserved_balance >= 0),
 
     CONSTRAINT ck_accounts_version_non_negative
         CHECK (version >= 0)
@@ -91,6 +98,9 @@ COMMENT ON COLUMN accounts.account_status
 COMMENT ON COLUMN accounts.balance
     IS 'Current account balance with precision of 19 digits and 2 decimal places';
 
+COMMENT ON COLUMN accounts.reserved_balance
+    IS 'Amount reserved for pending transactions (saga pattern)';
+
 COMMENT ON COLUMN accounts.created_at
     IS 'Timestamp when the account was created';
 
@@ -105,3 +115,6 @@ COMMENT ON COLUMN accounts.updated_by
 
 COMMENT ON COLUMN accounts.version
     IS 'Optimistic locking version';
+
+COMMENT ON COLUMN accounts.reserved_balance
+    IS 'Amount reserved for pending transactions (saga pattern)';

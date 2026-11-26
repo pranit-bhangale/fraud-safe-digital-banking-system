@@ -14,7 +14,8 @@ public interface TransactionRepository extends JpaRepository<Transaction, UUID> 
 
     Optional<Transaction> findByReferenceNo(String referenceNo);
 
-    Page<Transaction> findAllByUserIdOrderByTransactionDateDesc(UUID userId, Pageable pageable);
+    Page<Transaction> findByUserIdAndAccountNoOrderByTransactionDateDesc
+            (UUID userId, String accountNo, Pageable pageable);
 
-    Page<Transaction> findAllByAccountNoOrderByTransactionDateDesc(String accountNo, Pageable pageable);
+    Optional<Transaction> findFirstByAccountIdAndType(UUID accountId, String type);
 }

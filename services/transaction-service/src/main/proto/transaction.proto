@@ -4,41 +4,54 @@ package banking.transaction;
 
 option java_multiple_files = true;
 option java_package = "com.banking.transaction.grpc";
-option java_outer_classname = "TransactionProto";
+option java_outer_classname = "TransactionServiceProto";
 
 import "google/protobuf/timestamp.proto";
 
 service TransactionService {
-
-  rpc GetUserTransactionHistory(
-      TransactionHistoryRequest) returns (TransactionHistoryResponse);
+  rpc CreateInitialTransaction(CreateInitialTransactionRequest) returns (CreateInitialTransactionResponse);
+  rpc GetUserTransactionHistory(GetUserTransactionHistoryRequest) returns (GetUserTransactionHistoryResponse);
 }
 
-message TransactionHistoryRequest {
+message CreateInitialTransactionRequest {
   string user_id = 1;
-  int32 page = 2;
-  int32 size = 3;
+  string account_id = 2;
+  string account_no = 3;
+  string account_type = 4;
+  string balance = 5;
+  string description = 6;
+  google.protobuf.Timestamp transaction_date = 7;
 }
 
-message TransactionHistory {
-  string transaction_id = 1;
-  string user_id = 2;
-  string account_id = 3;
-  string reference_no = 4;
-  string type = 5;
-  string amount = 6;
-  string balance_after = 7;
-  string description = 8;
-  google.protobuf.Timestamp transaction_date = 9;
+message CreateInitialTransactionResponse {
+  bool success = 1;
+  string transaction_id = 2;
+  string message = 3;
 }
 
-message TransactionHistoryResponse {
-  repeated TransactionHistory transactions = 1;
+message GetUserTransactionHistoryRequest {
+  string user_id = 1;
+  string account_no = 2;
+  int32 page = 3;
+  int32 size = 4;
+}
 
+message GetUserTransactionHistoryResponse {
+  repeated TransactionInformation transactions = 1;
   int32 page = 2;
   int32 size = 3;
   int64 total_elements = 4;
   int32 total_pages = 5;
   bool has_next = 6;
   bool has_previous = 7;
+}
+
+message TransactionInformation {
+  string transaction_id = 1;
+  string reference_no = 2;
+  string type = 3;
+  string amount = 4;
+  string balance_after = 5;
+  string description = 6;
+  google.protobuf.Timestamp transaction_date = 7;
 }
