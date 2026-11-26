@@ -1,4 +1,4 @@
-package com.pranit.praya.cache.model;
+package com.banking.helpdesk.cache.model;
 
 import lombok.experimental.UtilityClass;
 

@@ -1,7 +1,7 @@
-package com.pranit.praya.cache.scheduler;
+package com.banking.helpdesk.cache.scheduler;
 
-import com.pranit.praya.cache.config.CacheConfig;
-import com.pranit.praya.cache.service.AgentCacheService;
+import com.banking.helpdesk.cache.config.CacheConfig;
+import com.banking.helpdesk.cache.service.AgentCacheService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.Cache;
@@ -39,17 +39,16 @@ public class CacheEvictionScheduler {
     public void scheduleKnowledgeRefreshAndEviction() {
         final long startTime = System.currentTimeMillis();
         log.info("[SCHEDULER] [DATA-REFRESH] Starting scheduled eviction of tool knowledge caches");
-        evictCache(CacheConfig.CACHE_PORTFOLIO_KNOWLEDGE);
-        evictCache(CacheConfig.CACHE_PORTFOLIO_PROJECTS);
+        evictCache();
         final long durationMs = System.currentTimeMillis() - startTime;
         log.info("[SCHEDULER] [DATA-REFRESH] Tool knowledge caches successfully evicted (durationMs: {})", durationMs);
     }
 
-    private void evictCache(String cacheName) {
-        Cache cache = this.cacheManager.getCache(cacheName);
+    private void evictCache() {
+        Cache cache = this.cacheManager.getCache(CacheConfig.CACHE_KNOWLEDGE);
         if (cache != null) {
             cache.clear();
-            log.debug("[SCHEDULER] [CACHE-CLEARED] Cleared cache: {}", cacheName);
+            log.debug("[SCHEDULER] [CACHE-CLEARED] Cleared cache: {}", CacheConfig.CACHE_KNOWLEDGE);
         }
     }
 }

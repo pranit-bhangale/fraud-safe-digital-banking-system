@@ -1,4 +1,4 @@
-package com.pranit.praya.chat;
+package com.banking.helpdesk.chat;
 
 import lombok.Builder;
 

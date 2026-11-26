@@ -1,6 +1,6 @@
-package com.pranit.praya.cache.config;
+package com.banking.helpdesk.cache.config;
 
-import com.pranit.praya.cache.spring.AtomicReferenceCacheManager;
+import com.banking.helpdesk.cache.spring.AtomicReferenceCacheManager;
 import org.springframework.cache.CacheManager;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.context.annotation.Bean;
@@ -20,8 +20,7 @@ import java.time.Duration;
 public class CacheConfig {
 
     public static final String CACHE_AGENT_RESPONSES = "agentResponses";
-    public static final String CACHE_PORTFOLIO_KNOWLEDGE = "portfolioKnowledge";
-    public static final String CACHE_PORTFOLIO_PROJECTS = "portfolioProjects";
+    public static final String CACHE_KNOWLEDGE = "knowledge";
 
     @Bean
     @Primary

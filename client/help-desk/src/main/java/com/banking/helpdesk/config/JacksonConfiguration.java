@@ -12,7 +12,7 @@ import org.springframework.context.annotation.Primary;
  * Centralized Jackson JSON configuration providing a production-ready ObjectMapper bean.
  */
 @Configuration
-public class JacksonConfig {
+public class JacksonConfiguration {
 
     @Bean
     @Primary

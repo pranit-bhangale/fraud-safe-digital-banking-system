@@ -1,10 +1,8 @@
-package com.pranit.praya.exception;
+package com.banking.helpdesk.exception;
 
-import com.pranit.praya.guardrail.exception.GuardrailViolationException;
-import com.pranit.praya.ratelimit.exception.RateLimitExceededException;
+import com.banking.helpdesk.guardrail.exception.GuardrailViolationException;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -24,25 +22,6 @@ import java.util.Map;
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
-
-    @ExceptionHandler(RateLimitExceededException.class)
-    public ResponseEntity<ProblemDetail> handleRateLimitExceeded(RateLimitExceededException ex, HttpServletRequest request) {
-        log.warn("[RATE-LIMIT] [REJECTED] path: {}, retryAfterSeconds: {}", request.getRequestURI(), ex.retryAfterSeconds());
-
-        ProblemDetail pd = ProblemDetail.forStatusAndDetail(
-                HttpStatus.TOO_MANY_REQUESTS,
-                "Rate limit exceeded. Try again in " + ex.retryAfterSeconds() + " seconds."
-        );
-        pd.setTitle("Too Many Requests");
-        pd.setType(URI.create("https://api.praya.ai/errors/rate-limit-exceeded"));
-        pd.setProperty("retryAfterSeconds", ex.retryAfterSeconds());
-        pd.setProperty("timestamp", Instant.now());
-        pd.setProperty("path", request.getRequestURI());
-
-        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
-                .header(HttpHeaders.RETRY_AFTER, Long.toString(ex.retryAfterSeconds()))
-                .body(pd);
-    }
 
     @ExceptionHandler(GuardrailViolationException.class)
     public ResponseEntity<ProblemDetail> handleGuardrailViolation(GuardrailViolationException ex, HttpServletRequest request) {

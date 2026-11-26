@@ -1,4 +1,4 @@
-package com.pranit.praya.cache.spring;
+package com.banking.helpdesk.cache.spring;
 
 import org.jspecify.annotations.NonNull;
 import org.springframework.cache.Cache;

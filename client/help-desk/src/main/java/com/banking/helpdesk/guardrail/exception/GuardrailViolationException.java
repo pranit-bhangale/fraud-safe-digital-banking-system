@@ -1,7 +1,7 @@
-package com.pranit.praya.guardrail.exception;
+package com.banking.helpdesk.guardrail.exception;
 
-import com.pranit.praya.guardrail.model.GuardrailViolation;
-import com.pranit.praya.guardrail.model.ValidationPhase;
+import com.banking.helpdesk.guardrail.model.GuardrailViolation;
+import com.banking.helpdesk.guardrail.model.ValidationPhase;
 import lombok.Getter;
 
 import java.util.List;

@@ -1,9 +1,9 @@
-package com.pranit.praya.guardrail.advisor;
+package com.banking.helpdesk.guardrail.advisor;
 
-import com.pranit.praya.guardrail.model.GuardrailResult;
-import com.pranit.praya.guardrail.model.ValidationPhase;
-import com.pranit.praya.guardrail.properties.GuardrailProperties;
-import com.pranit.praya.guardrail.service.GuardrailService;
+import com.banking.helpdesk.guardrail.model.GuardrailResult;
+import com.banking.helpdesk.guardrail.model.ValidationPhase;
+import com.banking.helpdesk.guardrail.properties.GuardrailProperties;
+import com.banking.helpdesk.guardrail.service.GuardrailService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -22,7 +22,6 @@ import reactor.core.publisher.Flux;
 
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * Spring AI advisor enforcing guardrails. Register TWO instances (see GuardrailConfiguration):
