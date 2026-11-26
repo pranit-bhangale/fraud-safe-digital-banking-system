@@ -1,9 +1,9 @@
-package com.pranit.praya.guardrail.validator;
+package com.banking.helpdesk.guardrail.validator;
 
-import com.pranit.praya.guardrail.model.GuardrailResult;
-import com.pranit.praya.guardrail.model.GuardrailViolation;
-import com.pranit.praya.guardrail.model.ValidationPhase;
-import com.pranit.praya.guardrail.properties.GuardrailProperties;
+import com.banking.helpdesk.guardrail.model.GuardrailResult;
+import com.banking.helpdesk.guardrail.model.GuardrailViolation;
+import com.banking.helpdesk.guardrail.model.ValidationPhase;
+import com.banking.helpdesk.guardrail.properties.GuardrailProperties;
 import org.springframework.core.Ordered;
 import org.springframework.stereotype.Component;
 

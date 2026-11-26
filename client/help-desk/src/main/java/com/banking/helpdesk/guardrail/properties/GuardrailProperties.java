@@ -1,6 +1,6 @@
-package com.pranit.praya.guardrail.properties;
+package com.banking.helpdesk.guardrail.properties;
 
-import com.pranit.praya.guardrail.model.ValidationPhase;
+import com.banking.helpdesk.guardrail.model.ValidationPhase;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.boot.context.properties.bind.DefaultValue;
 

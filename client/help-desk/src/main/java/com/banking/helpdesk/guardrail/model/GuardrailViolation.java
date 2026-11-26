@@ -1,4 +1,4 @@
-package com.pranit.praya.guardrail.model;
+package com.banking.helpdesk.guardrail.model;
 
 /**
  * Details of an individual guardrail rule violation.

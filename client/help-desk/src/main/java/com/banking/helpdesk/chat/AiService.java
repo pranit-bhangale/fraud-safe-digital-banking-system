@@ -1,4 +1,4 @@
-package com.pranit.praya.chat;
+package com.banking.helpdesk.chat;
 
 import org.springframework.http.codec.ServerSentEvent;
 import reactor.core.publisher.Flux;

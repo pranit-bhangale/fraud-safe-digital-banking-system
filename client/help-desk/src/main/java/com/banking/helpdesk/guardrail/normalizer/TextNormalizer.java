@@ -1,4 +1,4 @@
-package com.pranit.praya.guardrail.normalizer;
+package com.banking.helpdesk.guardrail.normalizer;
 
 import lombok.experimental.UtilityClass;
 
@@ -6,7 +6,7 @@ import java.text.Normalizer;
 import java.util.regex.Pattern;
 
 @UtilityClass
-public  class TextNormalizer {
+public class TextNormalizer {
 
     private static final Pattern INVISIBLE =
             Pattern.compile("[\\u200B-\\u200F\\u202A-\\u202E\\u2060\\uFEFF\\u00AD]");

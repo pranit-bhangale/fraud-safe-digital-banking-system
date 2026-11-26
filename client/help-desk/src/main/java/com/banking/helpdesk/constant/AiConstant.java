@@ -1,4 +1,4 @@
-package com.pranit.praya.constant;
+package com.banking.helpdesk.constant;
 
 import lombok.experimental.UtilityClass;
 

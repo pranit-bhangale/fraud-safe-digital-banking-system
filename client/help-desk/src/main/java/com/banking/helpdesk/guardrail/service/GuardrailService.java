@@ -1,7 +1,7 @@
-package com.pranit.praya.guardrail.service;
+package com.banking.helpdesk.guardrail.service;
 
-import com.pranit.praya.guardrail.model.GuardrailResult;
-import com.pranit.praya.guardrail.model.ValidationPhase;
+import com.banking.helpdesk.guardrail.model.GuardrailResult;
+import com.banking.helpdesk.guardrail.model.ValidationPhase;
 
 /**
  * Service contract for orchestrating guardrail evaluation across input and output lifecycle phases.

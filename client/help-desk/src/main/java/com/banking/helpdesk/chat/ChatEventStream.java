@@ -1,8 +1,8 @@
-package com.pranit.praya.chat;
+package com.banking.helpdesk.chat;
 
+import com.banking.helpdesk.constant.StreamEventConstant;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.pranit.praya.constant.StreamEventConstant;
 import org.springframework.http.codec.ServerSentEvent;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Sinks;

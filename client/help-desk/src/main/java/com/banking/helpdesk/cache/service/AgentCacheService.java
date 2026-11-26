@@ -1,6 +1,6 @@
-package com.pranit.praya.cache.service;
+package com.banking.helpdesk.cache.service;
 
-import com.pranit.praya.cache.config.CacheConfig;
+import com.banking.helpdesk.cache.config.CacheConfig;
 import org.springframework.cache.annotation.CacheEvict;
 import org.springframework.cache.annotation.CachePut;
 import org.springframework.cache.annotation.Cacheable;
@@ -17,7 +17,7 @@ public class AgentCacheService {
      */
     @Cacheable(
             cacheNames = CacheConfig.CACHE_AGENT_RESPONSES,
-            key = "T(com.pranit.praya.cache.model.QueryNormalizer).normalize(#prompt)",
+            key = "T(com.banking.helpdesk.cache.model.QueryNormalizer).normalize(#prompt)",
             unless = "#result == null"
     )
     public String getCachedAnswer(String prompt) {
@@ -29,7 +29,7 @@ public class AgentCacheService {
      */
     @CachePut(
             cacheNames = CacheConfig.CACHE_AGENT_RESPONSES,
-            key = "T(com.pranit.praya.cache.model.QueryNormalizer).normalize(#prompt)"
+            key = "T(com.banking.helpdesk.cache.model.QueryNormalizer).normalize(#prompt)"
     )
     public String putAnswer(String prompt, String answer) {
         return answer;
@@ -40,7 +40,7 @@ public class AgentCacheService {
      */
     @CacheEvict(
             cacheNames = CacheConfig.CACHE_AGENT_RESPONSES,
-            key = "T(com.pranit.praya.cache.model.QueryNormalizer).normalize(#prompt)"
+            key = "T(com.banking.helpdesk.cache.model.QueryNormalizer).normalize(#prompt)"
     )
     public void evictPrompt(String prompt) {
     }

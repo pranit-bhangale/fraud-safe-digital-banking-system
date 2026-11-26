@@ -1,14 +1,13 @@
 package com.banking.helpdesk.chat;
 
+import com.banking.helpdesk.cache.service.AgentCacheService;
+import com.banking.helpdesk.constant.StreamEventConstant;
+import com.banking.helpdesk.guardrail.exception.GuardrailViolationException;
+import com.banking.helpdesk.guardrail.service.GuardrailService;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.pranit.praya.cache.service.AgentCacheService;
-import com.pranit.praya.chat.ChatEventStream;
-import com.pranit.praya.constant.StreamEventConstant;
-import com.pranit.praya.guardrail.exception.GuardrailViolationException;
-import com.pranit.praya.guardrail.service.GuardrailService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.session.advisor.SessionAdvisors;
 import org.springframework.http.codec.ServerSentEvent;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
@@ -19,14 +18,14 @@ import reactor.core.publisher.Flux;
  */
 @Slf4j
 @Service
-public class PrayaAiService implements AiService {
+public class HelpDeskAgentService implements AiService {
 
     private final ChatClient chatClient;
     private final ObjectMapper objectMapper;
     private final AgentCacheService agentCacheService;
     private final GuardrailService guardrailService;
 
-    public PrayaAiService(
+    public HelpDeskAgentService(
             ChatClient chatClient,
             ObjectMapper objectMapper,
             AgentCacheService agentCacheService,
@@ -65,7 +64,7 @@ public class PrayaAiService implements AiService {
         final Flux<ServerSentEvent<String>> answerTokens = this.chatClient
                 .prompt()
                 .advisors(events.observer())
-                .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, conversationId))
+                .advisors(SessionAdvisors.session(conversationId))
                 .user(prompt)
                 .stream()
                 .content()

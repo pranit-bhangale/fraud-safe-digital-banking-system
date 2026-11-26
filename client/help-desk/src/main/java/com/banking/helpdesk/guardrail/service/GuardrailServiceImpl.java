@@ -1,12 +1,12 @@
-package com.pranit.praya.guardrail.service;
+package com.banking.helpdesk.guardrail.service;
 
-import com.pranit.praya.guardrail.exception.GuardrailViolationException;
-import com.pranit.praya.guardrail.model.GuardrailResult;
-import com.pranit.praya.guardrail.model.GuardrailViolation;
-import com.pranit.praya.guardrail.model.ValidationPhase;
-import com.pranit.praya.guardrail.normalizer.TextNormalizer;
-import com.pranit.praya.guardrail.properties.GuardrailProperties;
-import com.pranit.praya.guardrail.validator.GuardrailValidator;
+import com.banking.helpdesk.guardrail.exception.GuardrailViolationException;
+import com.banking.helpdesk.guardrail.model.GuardrailResult;
+import com.banking.helpdesk.guardrail.model.GuardrailViolation;
+import com.banking.helpdesk.guardrail.model.ValidationPhase;
+import com.banking.helpdesk.guardrail.normalizer.TextNormalizer;
+import com.banking.helpdesk.guardrail.properties.GuardrailProperties;
+import com.banking.helpdesk.guardrail.validator.GuardrailValidator;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.annotation.AnnotationAwareOrderComparator;
 import org.springframework.stereotype.Service;

@@ -1,9 +1,9 @@
-package com.pranit.praya.guardrail.validator;
+package com.banking.helpdesk.guardrail.validator;
 
-import com.pranit.praya.guardrail.model.GuardrailResult;
-import com.pranit.praya.guardrail.model.GuardrailViolation;
-import com.pranit.praya.guardrail.model.ValidationPhase;
-import com.pranit.praya.guardrail.properties.GuardrailProperties;
+import com.banking.helpdesk.guardrail.model.GuardrailResult;
+import com.banking.helpdesk.guardrail.model.GuardrailViolation;
+import com.banking.helpdesk.guardrail.model.ValidationPhase;
+import com.banking.helpdesk.guardrail.properties.GuardrailProperties;
 import org.springframework.core.Ordered;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -66,6 +66,14 @@ public class TopicScopeGuardrailValidator implements GuardrailValidator {
         return sb.toString();
     }
 
+    private static int wordCount(String text) {
+        return text.trim().split("\\s+").length;
+    }
+
+    private static GuardrailResult fail(ValidationPhase phase, String rule, String target, String message) {
+        return GuardrailResult.failure(List.of(new GuardrailViolation(phase, rule, target, message)), message);
+    }
+
     @Override
     public boolean supports(ValidationPhase phase) {
         return phase == ValidationPhase.INPUT && properties.scope().enabled();
@@ -86,14 +94,6 @@ public class TopicScopeGuardrailValidator implements GuardrailValidator {
             if (!onTopic) return fail(phase, "NO_ALLOWED_TOPIC", "allowed-topics", scope.message());
         }
         return GuardrailResult.success(text);
-    }
-
-    private static int wordCount(String text) {
-        return text.trim().split("\\s+").length;
-    }
-
-    private static GuardrailResult fail(ValidationPhase phase, String rule, String target, String message) {
-        return GuardrailResult.failure(List.of(new GuardrailViolation(phase, rule, target, message)), message);
     }
 
     @Override

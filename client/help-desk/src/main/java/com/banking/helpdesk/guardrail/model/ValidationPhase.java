@@ -1,4 +1,4 @@
-package com.pranit.praya.guardrail.model;
+package com.banking.helpdesk.guardrail.model;
 
 /**
  * Lifecycle phase of the AI prompt/response cycle being validated.

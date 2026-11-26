@@ -1,6 +1,6 @@
-package com.pranit.praya.cache.spring;
+package com.banking.helpdesk.cache.spring;
 
-import com.pranit.praya.cache.service.AtomicReferenceCache;
+import com.banking.helpdesk.cache.service.AtomicReferenceCache;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.springframework.cache.Cache;

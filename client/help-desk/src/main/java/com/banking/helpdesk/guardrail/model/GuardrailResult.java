@@ -1,4 +1,4 @@
-package com.pranit.praya.guardrail.model;
+package com.banking.helpdesk.guardrail.model;
 
 import java.util.Collections;
 import java.util.List;

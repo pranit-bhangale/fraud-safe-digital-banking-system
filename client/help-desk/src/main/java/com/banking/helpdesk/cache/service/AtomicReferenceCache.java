@@ -1,7 +1,7 @@
-package com.pranit.praya.cache.service;
+package com.banking.helpdesk.cache.service;
 
-import com.pranit.praya.cache.model.CacheEntry;
-import com.pranit.praya.cache.model.CacheSnapshot;
+import com.banking.helpdesk.cache.model.CacheEntry;
+import com.banking.helpdesk.cache.model.CacheSnapshot;
 import org.jspecify.annotations.NonNull;
 
 import java.time.Duration;
