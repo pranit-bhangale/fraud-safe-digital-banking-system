@@ -3,3 +3,208 @@ spring:
     name: account-service
   config:
     import: "optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          public-key-location: ${PUBLIC_KEY_PATH:key/public_key.pem}
+  # Database Configuration
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:account_db}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: AccountPool
+      minimum-idle: 5
+      maximum-pool-size: 10
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  # JPA CONFIGURATION
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+        jdbc:
+          time_zone: UTC
+  # FLYWAY CONFIGURATION
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    table: flyway_schema_history
+    baseline-on-migrate: true
+    baseline-version: 1
+    validate-on-migrate: true
+    clean-disabled: true
+    out-of-order: false
+cors:
+  allowed-origins:
+    - ${CORS_ALLOWED_ORIGIN}
+  allowed-methods:
+    - GET
+    - POST
+    - PUT
+    - DELETE
+    - OPTIONS
+    - PATCH
+    - HEAD
+  allowed-headers:
+    - Content-Type
+    - X-API-Version
+    - Accept
+    - Origin
+    - Access-Control-Request-Method
+    - Access-Control-Request-Headers
+  allow-credentials: true
+# EUREKA SERVICE DISCOVERY
+eureka:
+  instance:
+    prefer-ip-address: true
+  client:
+    fetch-registry: true
+    register-with-eureka: true
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+# Resilience4j Circuit Breaker Configuration
+resilience4j:
+  circuitbreaker:
+    instances:
+      # Circuit breaker for User Service Feign Client
+      userService:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        waitDurationInOpenState: 30s
+        failureRateThreshold: 50
+        slowCallRateThreshold: 100
+        slowCallDurationThreshold: 5s
+        recordExceptions:
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+          - org.springframework.web.client.ResourceAccessException
+          - feign.FeignException
+
+      # Circuit breaker for Transaction Service gRPC Client
+      transactionService:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        waitDurationInOpenState: 30s
+        failureRateThreshold: 50
+        slowCallRateThreshold: 100
+        slowCallDurationThreshold: 10s
+        recordExceptions:
+          - io.grpc.StatusRuntimeException
+          - java.io.IOException
+
+  retry:
+    instances:
+      userService:
+        maxAttempts: 3
+        waitDuration: 500ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+          - org.springframework.web.client.ResourceAccessException
+
+      transactionService:
+        maxAttempts: 3
+        waitDuration: 1s
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        retryExceptions:
+          - io.grpc.StatusRuntimeException
+
+  timelimiter:
+    instances:
+      userService:
+        timeoutDuration: 5s
+        cancelRunningFuture: true
+      transactionService:
+        timeoutDuration: 10s
+        cancelRunningFuture: true
+
+  ratelimiter:
+    instances:
+      userService:
+        limitForPeriod: 100
+        limitRefreshPeriod: 1s
+        timeoutDuration: 1s
+      transactionService:
+        limitForPeriod: 50
+        limitRefreshPeriod: 1s
+        timeoutDuration: 2s
+# Feign Client Configuration with Circuit Breaker
+feign:
+  resilience4j:
+    enabled: true
+grpc:
+  client:
+    transaction-service:
+      enableKeepAlive: true
+      keepAliveWithoutCalls: true
+      negotiationType: plaintext
+# ACTUATOR AND HEALTH CHECKS
+management:
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+          - info
+          - circuitbreakers
+          - ratelimiters
+          - retries
+          - timelimiters
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      readinessstate:
+        enabled: true
+      show-details: never
+  health:
+    mail:
+      enabled: false
+    circuitbreakers:
+      enabled: true
+    ratelimiters:
+      enabled: true
+# APPLICATION INFORMATION
+info:
+  app:
+    name: account-service
+    description: Account Management Service
+    version: 1.0.0
+# LOGGING CONFIGURATION
+logging:
+  file:
+    name: ${LOG_PATH:logs/account-service.log}
+  level:
+    root: ${LOG_LEVEL_ROOT:INFO}
+    com.banking.account: ${LOG_LEVEL:INFO}
+    org.hibernate.SQL: WARN
+  logback:
+    rollingpolicy:
+      file-name-pattern: ${LOG_PATH:logs/account-service.log}.%d{yyyy-MM-dd}.%i.log.gz
+      max-file-size: 50MB
+      total-size-cap: 1GB
+      max-history: 30
+      clean-history-on-start: false
+server:
+  port: ${PORT:8082}
+  shutdown: graceful

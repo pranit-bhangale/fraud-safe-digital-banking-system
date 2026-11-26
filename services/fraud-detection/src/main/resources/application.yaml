@@ -3,3 +3,132 @@ spring:
     name: fraud-detection
   config:
     import: "optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD}
+      ssl:
+        enabled: ${REDIS_SSL:false}
+      connect-timeout: 2000ms
+      timeout: 500ms
+      client-type: lettuce
+      lettuce:
+        pool:
+          max-active: 64
+          max-idle: 16
+          min-idle: 8
+          max-wait: 1000ms
+  cloud:
+    function:
+      definition: fraudDetection
+    stream:
+      default-binder: kafka
+      bindings:
+        # Inbound payment initiated (No retry, No DLQ: exactly 1 attempt)
+        fraudDetection-in-0:
+          destination: ${TOPIC_PAYMENT_INITIATED:banking.payment.initiated.v1}
+          group: fraud-service-group
+          contentType: application/json
+          consumer:
+            concurrency: ${FRAUD_CONSUMER_CONCURRENCY:3}
+            max-attempts: 1
+        # Outbound fraud ack
+        fraudDetection-out-0:
+          destination: ${TOPIC_PAYMENT_FRAUD_ACK:banking.payment.fraud-ack.v1}
+          contentType: application/json
+      kafka:
+        binder:
+          brokers: ${KAFKA_BROKERS:localhost:9092}
+          auto-create-topics: ${KAFKA_AUTO_CREATE_TOPICS:false}
+          min-partition-count: 6
+          replication-factor: ${KAFKA_REPLICATION_FACTOR:1}
+          configuration:
+            security.protocol: ${KAFKA_SECURITY_PROTOCOL:PLAINTEXT}
+        bindings:
+          fraudDetection-in-0:
+            consumer:
+              start-offset: earliest
+              auto-commit-offset: true
+              configuration:
+                max.poll.records: 50
+                session.timeout.ms: 15000
+                heartbeat.interval.ms: 3000
+          fraudDetection-out-0:
+            producer:
+              sync: false
+              configuration:
+                acks: all
+                enable.idempotence: true
+                compression.type: lz4
+                delivery.timeout.ms: 15000
+                request.timeout.ms: 5000
+                batch.size: 16384
+                linger.ms: 5
+fraud:
+  window-ms: 600000
+  window-limit: 5
+  lock-ttl-seconds: 60
+  high-amount: 100000
+  threshold: 60
+  weights:
+    sender-velocity: 40
+    receiver-velocity: 40
+    burst: 30
+    high-amount: 30
+# EUREKA SERVICE DISCOVERY
+eureka:
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${random.value}
+  client:
+    fetch-registry: true
+    register-with-eureka: true
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+# ACTUATOR AND HEALTH CHECKS
+management:
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+          - info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      readinessstate:
+        enabled: true
+      show-details: never
+  health:
+    mail:
+      enabled: false
+# APPLICATION INFORMATION
+info:
+  app:
+    name: fraud-detection
+    description: "Fraud Management & Real-Time Decisioning Service"
+    version: 1.0.0
+# LOGGING CONFIGURATION
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: ${LOG_PATH:logs/fraud-detection.log}
+  level:
+    root: ${LOG_LEVEL_ROOT:INFO}
+    com.banking.fraud: ${LOG_LEVEL:DEBUG}
+  logback:
+    rollingpolicy:
+      file-name-pattern: ${LOG_PATH:logs/fraud-detection.log}.%d{yyyy-MM-dd}.%i.log.gz
+      max-file-size: 50MB
+      total-size-cap: 1GB
+      max-history: 30
+      clean-history-on-start: false
+
+server:
+  port: ${PORT:8888}
+  shutdown: graceful
