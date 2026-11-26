@@ -22,9 +22,9 @@ spring:
           disallow-delete: true
         capabilities:
           tool: true
-          resource: false
-          prompt: false
-          completion: false
+          resource: true
+          prompt: true
+          completion: true
         tool-change-notification: false
         prompt-change-notification: false
         resource-change-notification: false
