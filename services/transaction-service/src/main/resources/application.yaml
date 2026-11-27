@@ -61,13 +61,13 @@ spring:
           group: transaction-service-group
           contentType: application/json
           consumer:
-            concurrency: ${TRANSACTION_CONSUMER_CONCURRENCY:3}
+            concurrency: ${TRANSACTION_CONSUMER_CONCURRENCY:6}
             max-attempts: 3
       kafka:
         binder:
-          brokers: ${KAFKA_BROKERS:localhost:9092}
+          brokers: ${KAFKA_BROKERS:localhost:29092}
           auto-create-topics: ${KAFKA_AUTO_CREATE_TOPICS:false}
-          min-partition-count: 6
+          min-partition-count: ${KAFKA_TOPIC_PARTITIONS:6}
           replication-factor: ${KAFKA_REPLICATION_FACTOR:1}
         bindings:
           transactionInitiated-out-0:
@@ -83,6 +83,10 @@ spring:
               auto-commit-offset: true
               configuration:
                 max.poll.records: 50
+                max.poll.interval.ms: 300000
+                session.timeout.ms: 15000
+                heartbeat.interval.ms: 3000
+                partition.assignment.strategy: org.apache.kafka.clients.consumer.CooperativeStickyAssignor
 cors:
   allowed-origins:
     - ${CORS_ALLOWED_ORIGIN}
