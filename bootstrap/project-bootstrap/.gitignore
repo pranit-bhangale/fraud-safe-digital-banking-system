@@ -1,0 +1,5 @@
+.secrets/
+.pids/
+logs/
+*.pid
+*.log

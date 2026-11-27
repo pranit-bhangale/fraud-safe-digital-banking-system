@@ -1,0 +1,49 @@
+---
+- name: Initialise git repository
+  ansible.builtin.command:
+    cmd: "git init -b {{ git_settings.branch | default('main') }}"
+    chdir: "{{ project_root }}"
+    creates: "{{ project_root }}/.git"
+  when: git_settings.init | default(true)
+
+- name: Write .gitignore (created once, never overwritten)
+  ansible.builtin.template:
+    src: "{{ playbook_dir }}/templates/gitignore.j2"
+    dest: "{{ project_root }}/.gitignore"
+    force: false
+  when: git_settings.gitignore | default(true)
+
+- name: Check whether the repository already has a commit
+  ansible.builtin.command:
+    cmd: git rev-parse --verify HEAD
+    chdir: "{{ project_root }}"
+  register: has_commits
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: git_settings.initial_commit | default(false)
+
+- name: Create initial commit
+  ansible.builtin.shell:
+    cmd: >-
+      git add -A &&
+      git
+      {% if git_settings.user_name is defined %}-c user.name={{ git_settings.user_name | quote }}{% endif %}
+      {% if git_settings.user_email is defined %}-c user.email={{ git_settings.user_email | quote }}{% endif %}
+      commit -m {{ (git_settings.commit_message | default('chore: bootstrap project')) | quote }}
+    chdir: "{{ project_root }}"
+    executable: /bin/bash
+  when:
+    - git_settings.initial_commit | default(false)
+    - has_commits is not skipped
+    - has_commits.rc != 0
+
+- name: Clone additional repositories
+  ansible.builtin.git:
+    repo: "{{ item.repo }}"
+    dest: "{{ item.dest }}"
+    version: "{{ item.version | default('HEAD') }}"
+    update: "{{ item.update | default(false) }}"
+  loop: "{{ git_repos }}"
+  loop_control:
+    label: "{{ item.repo }}"

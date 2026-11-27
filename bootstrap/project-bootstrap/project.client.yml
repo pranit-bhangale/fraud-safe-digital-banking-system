@@ -1,0 +1,55 @@
+---
+# ============================================================
+# Client Configuration: my-cloud-platform
+# Location: <repo>/bootstrap/project-bootstrap/project.client.yml
+# Usage:
+#   ansible-playbook bootstrap.yml -e @project.client.yml
+# ============================================================
+project_name: my-cloud-platform
+service_manager: local_process    # 'local_process' for dev / non-root, or 'systemd' for production Linux
+project_root: "/var/www"
+
+# Global baseline environment injected into every service
+global_env:
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "INFO"
+
+# Sequential order of services (starts 1 -> 2 -> 3; stops 3 -> 2 -> 1)
+local_services:
+  # 1. First service (e.g. Node.js Auth Service)
+  - name: auth-service
+    display_name: "Auth Service (Node.js)"
+    directory: "/var/www/auth"
+    exec_start: "node server.js"
+    port: 3000
+    health_url: "http://127.0.0.1:3000/health"
+    startup_timeout: 45
+    env:
+      PORT: "3000"
+
+  # 2. Second service (starts only AFTER auth-service is healthy)
+  - name: backend-api
+    display_name: "Core API (Python FastAPI)"
+    directory: "/var/www/api"
+    exec_start: "python3 -m uvicorn main:app --port 8000"
+    port: 8000
+    health_url: "http://127.0.0.1:8000/health"
+    startup_timeout: 60
+    env:
+      AUTH_URL: "http://127.0.0.1:3000"
+
+  # 3. Third service (starts only AFTER backend-api is healthy)
+  - name: web-gateway
+    display_name: "Web Gateway (Go Binary)"
+    directory: "/var/www/gateway"
+    exec_start: "./bin/gateway"
+    port: 8080
+    health_url: "http://127.0.0.1:8080/healthz"
+    is_final_check: true   # Triggers dedicated final verification check
+    env:
+      PORT: "8080"
+
+endpoints:
+  - "Web Gateway (Ingress):  http://127.0.0.1:8080"
+  - "Core API (FastAPI):     http://127.0.0.1:8000"
+  - "Auth Service (Node.js): http://127.0.0.1:3000"

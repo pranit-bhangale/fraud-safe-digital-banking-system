@@ -1,0 +1,38 @@
+---
+- name: Set default action to start
+  ansible.builtin.set_fact:
+    service_action: "{{ action | default('start') }}"
+
+- name: Prepare directories for local_process mode
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    mode: "0755"
+  loop:
+    - "{{ services_pid_dir }}"
+    - "{{ services_log_dir }}"
+  when:
+    - service_manager == 'local_process'
+    - service_action == 'start'
+
+- name: Start services sequentially (1 -> 2 -> 3)
+  ansible.builtin.include_tasks: start_service.yml
+  loop: "{{ local_services | default([]) }}"
+  loop_control:
+    loop_var: current_service
+    index_var: service_index
+  when:
+    - service_action == 'start'
+    - local_services is defined
+    - local_services | length > 0
+
+- name: Stop services in reverse sequential order (3 -> 2 -> 1)
+  ansible.builtin.include_tasks: stop_service.yml
+  loop: "{{ (local_services | default([])) | reverse | list }}"
+  loop_control:
+    loop_var: current_service
+    index_var: service_index
+  when:
+    - service_action == 'stop'
+    - local_services is defined
+    - local_services | length > 0

@@ -1,0 +1,24 @@
+---
+- name: Wait for TCP ports
+  ansible.builtin.wait_for:
+    host: "{{ item.host | default('127.0.0.1') }}"
+    port: "{{ item.port }}"
+    timeout: "{{ item.timeout | default(60) }}"
+  loop: "{{ health_checks.ports | default([]) }}"
+  loop_control:
+    label: "{{ item.name | default(item.port) }}"
+  check_mode: false
+
+- name: Wait for HTTP endpoints
+  ansible.builtin.uri:
+    url: "{{ item.url }}"
+    status_code: "{{ item.status | default([200]) }}"
+    timeout: 5
+  loop: "{{ health_checks.http | default([]) }}"
+  loop_control:
+    label: "{{ item.name | default(item.url) }}"
+  register: http_check
+  until: http_check is succeeded
+  retries: "{{ ((item.timeout | default(60)) / (item.delay | default(3))) | int }}"
+  delay: "{{ item.delay | default(3) }}"
+  check_mode: false

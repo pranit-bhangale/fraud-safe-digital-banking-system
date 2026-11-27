@@ -1,0 +1,49 @@
+---
+- name: "Stopping service [Reverse {{ service_index + 1 }}/{{ local_services | length }}]: {{ current_service.display_name | default(current_service.name) }}"
+  ansible.builtin.debug:
+    msg: "Shutting down {{ current_service.name }} (mode: {{ service_manager }})..."
+
+# ----------------- SYSTEMD MODE -----------------
+- name: Stop systemd service
+  ansible.builtin.systemd:
+    name: "{{ systemd_service_prefix }}-{{ current_service.name }}"
+    state: stopped
+  become: true
+  when: service_manager == 'systemd'
+
+# ----------------- LOCAL PROCESS MODE -----------------
+- name: Stop local process
+  when: service_manager == 'local_process'
+  block:
+    - name: Check PID file for {{ current_service.name }}
+      ansible.builtin.stat:
+        path: "{{ services_pid_dir }}/{{ current_service.name }}.pid"
+      register: stop_pid_stat
+
+    - name: Read PID for {{ current_service.name }}
+      ansible.builtin.slurp:
+        path: "{{ services_pid_dir }}/{{ current_service.name }}.pid"
+      register: stop_pid_raw
+      when: stop_pid_stat.stat.exists
+
+    - name: Stop process with SIGTERM followed by SIGKILL
+      ansible.builtin.shell:
+        cmd: |
+          PID="{{ (stop_pid_raw.content | b64decode | trim) }}"
+          if kill -0 "$PID" 2>/dev/null; then
+            kill -15 "$PID" 2>/dev/null || true
+            for i in $(seq 1 {{ services_stop_timeout }}); do
+              kill -0 "$PID" 2>/dev/null || exit 0
+              sleep 1
+            done
+            kill -9 "$PID" 2>/dev/null || true
+          fi
+        executable: /bin/bash
+      when: stop_pid_stat.stat.exists
+      failed_when: false
+
+    - name: Remove PID file
+      ansible.builtin.file:
+        path: "{{ services_pid_dir }}/{{ current_service.name }}.pid"
+        state: absent
+      when: stop_pid_stat.stat.exists

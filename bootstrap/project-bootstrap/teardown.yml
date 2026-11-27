@@ -1,0 +1,55 @@
+---
+# ============================================================
+# Safe Teardown (Stops local processes in reverse order: 3 -> 2 -> 1)
+# ============================================================
+# Usage:
+#   ansible-playbook teardown.yml                        # Stop local processes
+#   ansible-playbook teardown.yml -e @project.client.yml  # Stop client processes
+# ============================================================
+- name: Local Process Teardown & Safe Graceful Shutdown
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars_files:
+    - project.yml
+
+  pre_tasks:
+    - name: Detect environment overlay file
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/project.{{ env_name | default('dev') }}.yml"
+      register: env_overlay_file
+      tags: [always]
+
+    - name: Load environment overlay if present
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/project.{{ env_name | default('dev') }}.yml"
+      when: env_overlay_file.stat.exists
+      tags: [always]
+
+    - name: Display teardown execution plan
+      ansible.builtin.debug:
+        msg:
+          - "=========================================================="
+          - "Initiating graceful teardown for '{{ project_name }}'"
+          - "Stopping local services in reverse order..."
+          - "=========================================================="
+
+  tasks:
+    - name: Stop local services in reverse order (3 -> 2 -> 1)
+      ansible.builtin.import_role:
+        name: services_manager
+      vars:
+        action: stop
+      when:
+        - local_services is defined
+        - local_services | length > 0
+      tags: [services]
+
+  post_tasks:
+    - name: Teardown Summary
+      ansible.builtin.debug:
+        msg:
+          - "=========================================================="
+          - " Teardown completed. All local processes stopped. "
+          - "=========================================================="

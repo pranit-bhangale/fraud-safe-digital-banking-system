@@ -1,0 +1,22 @@
+[Unit]
+Description={{ current_service.display_name | default(current_service.name) }}
+After=network.target network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory={{ current_service.directory }}
+ExecStart={{ current_service.exec_start }}
+Restart=always
+RestartSec=5s
+KillMode=process
+TimeoutStopSec={{ services_stop_timeout | default(15) }}
+LimitNOFILE=65536
+
+# Environment Variables
+{% for k, v in merged_service_env.items() %}
+Environment="{{ k }}={{ v }}"
+{% endfor %}
+
+[Install]
+WantedBy=multi-user.target
