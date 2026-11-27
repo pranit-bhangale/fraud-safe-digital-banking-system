@@ -104,3 +104,18 @@ class PilotConsole:
     def print(self, *args, **kwargs) -> None:
         """Forward directly to rich console."""
         self.console.print(*args, **kwargs)
+
+    @property
+    def size(self):
+        """Forward terminal size from rich console."""
+        return self.console.size
+
+    @property
+    def width(self) -> int:
+        """Terminal width."""
+        return self.console.size.width
+
+    @property
+    def height(self) -> int:
+        """Terminal height."""
+        return self.console.size.height

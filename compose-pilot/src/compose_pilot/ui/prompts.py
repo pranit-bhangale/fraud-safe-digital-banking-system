@@ -7,6 +7,38 @@ from typing import Optional
 from compose_pilot.ui.console import PilotConsole
 
 
+def prompt_stop_scope(console: PilotConsole, project_name: str) -> str:
+    """Display interactive menu for selecting stop teardown action.
+    
+    Returns:
+        'stop': Just stop and remove containers (keep volumes & images)
+        'volumes': Stop and remove containers + delete volumes (reset data)
+        'all': Full clean: remove containers + volumes + built images & cache
+        'cancel': Abort stop operation
+    """
+    console.major_section(f"🛑 Stop Project [{project_name}]")
+    console.minor_section("Select teardown action:")
+    console.print("  [info]1)[/info] Just stop containers (keep database volumes & built images) [default]")
+    console.print("  [info]2)[/info] Stop & remove volumes (reset database & persistent data)")
+    console.print("  [info]3)[/info] Full clean (remove containers + volumes + images + cache)")
+    console.print("  [info]4)[/info] Cancel")
+    console.print()
+
+    try:
+        choice = input("Select option [1-4] (default: 1): ").strip()
+    except (EOFError, KeyboardInterrupt):
+        return "cancel"
+
+    if choice in ("1", ""):
+        return "stop"
+    elif choice == "2":
+        return "volumes"
+    elif choice == "3":
+        return "all"
+    else:
+        return "cancel"
+
+
 def prompt_clean_scope(console: PilotConsole, project_name: str) -> tuple[bool, bool]:
     """Display interactive menu for selecting cleanup scope.
     

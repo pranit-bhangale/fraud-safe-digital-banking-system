@@ -1,5 +1,6 @@
 """Docker and Docker Compose command executor and metadata parser."""
 
+import json
 import os
 import re
 import subprocess
@@ -271,3 +272,71 @@ class ComposeManager:
         if res.returncode == 0:
             return [line.strip() for line in res.stdout.splitlines() if line.strip()]
         return []
+
+    def get_conflicting_containers(self) -> list[tuple[str, str, str]]:
+        """Find containers in Docker daemon that conflict with current services
+        (e.g. from an older project name or matching container_name).
+        Returns list of (container_id, container_name, reason).
+        """
+        conflicts: list[tuple[str, str, str]] = []
+        try:
+            cmd = ["docker", "ps", "-a", "--format", "{{json .}}"]
+            res = run_command(cmd, check=False)
+            if res.returncode != 0:
+                return []
+
+            services = set(self.get_services())
+            explicit_names = set(services)
+            for s in services:
+                explicit_names.add(s)
+
+            our_compose_paths = set()
+            for f in self.config.compose_files:
+                try:
+                    our_compose_paths.add(str(f.resolve()).lower())
+                    our_compose_paths.add(f.name.lower())
+                except Exception:
+                    our_compose_paths.add(str(f).lower())
+
+            for line in res.stdout.splitlines():
+                if not line.strip():
+                    continue
+                try:
+                    cdata = json.loads(line)
+                    cid = cdata.get("ID", "")
+                    cname = cdata.get("Names", "").lstrip("/")
+                    raw_labels = cdata.get("Labels", "")
+
+                    labels: dict[str, str] = {}
+                    for item in raw_labels.split(","):
+                        if "=" in item:
+                            k, v = item.split("=", 1)
+                            labels[k.strip()] = v.strip()
+
+                    proj = labels.get("com.docker.compose.project", "")
+                    svc = labels.get("com.docker.compose.service", "")
+                    cfg_file = labels.get("com.docker.compose.project.config_files", "").lower()
+
+                    is_our_project = (proj == self.config.project_name)
+                    if not is_our_project:
+                        is_same_file = any(p in cfg_file for p in our_compose_paths) if our_compose_paths else False
+                        is_name_conflict = (cname in explicit_names) or (svc in services)
+                        if is_same_file or is_name_conflict:
+                            conflicts.append((cid, cname, f"Conflicting container from project '{proj}'"))
+                except Exception:
+                    continue
+        except Exception:
+            pass
+        return conflicts
+
+    def remove_conflicting_containers(self) -> list[str]:
+        """Stop and remove any containers that conflict with current project services."""
+        removed: list[str] = []
+        for cid, cname, reason in self.get_conflicting_containers():
+            try:
+                res = run_command(["docker", "rm", "-f", cid], check=False)
+                if res.returncode == 0:
+                    removed.append(f"{cname} ({cid[:12]})")
+            except Exception:
+                pass
+        return removed
