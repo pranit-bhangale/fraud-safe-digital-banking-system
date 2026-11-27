@@ -1,0 +1,9 @@
+---
+# Each command:
+#   name (required), cmd (required)
+#   phase: pre|post (default post)   pre = before scaffold, post = after docker stacks
+#   chdir, creates, removes, env: {KEY: value}
+#   retries, delay                   retry until exit code is 0
+#   ignore_errors: false, show_output: false, enabled: true
+setup_commands: []
+phase: post

@@ -1,0 +1,6 @@
+---
+directories: []    # string, or {path, mode}
+managed_files: []  # {src, dest, mode?, backup?, overwrite?}   src relative to playbook dir
+rendered_files: [] # {src, dest, mode?, backup?, overwrite?}   Jinja templates
+symlinks: []       # {src, dest}
+downloads: []      # {url, dest, checksum?, mode?}

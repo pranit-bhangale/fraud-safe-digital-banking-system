@@ -1,0 +1,29 @@
+---
+- name: Verify the Docker daemon is reachable
+  ansible.builtin.command: docker info
+  changed_when: false
+  check_mode: false
+  when: docker_stacks | length > 0
+
+- name: Bring up docker compose stacks
+  ansible.builtin.shell:
+    cmd: >-
+      docker compose
+      -f {{ item.compose_file | quote }}
+      {% if item.project_name is defined %}-p {{ item.project_name | quote }}{% endif %}
+      {% if item.env_file is defined %}--env-file {{ item.env_file | quote }}{% endif %}
+      up -d
+      {% if item.build | default(false) %}--build{% endif %}
+      {% if item.pull is defined %}--pull {{ item.pull }}{% endif %}
+      {% if item.wait | default(false) %}--wait --wait-timeout {{ item.wait_timeout | default(180) }}{% endif %}
+      {{ (item.services | default([])) | join(' ') }}
+    chdir: "{{ item.project_dir | default(item.compose_file | dirname) }}"
+    executable: /bin/bash
+  environment:
+    COMPOSE_PROFILES: "{{ item.profiles | default([]) | join(',') }}"
+  loop: "{{ docker_stacks }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: item.enabled | default(true)
+  register: stack_up
+  changed_when: stack_up.stderr is search('Created|Started|Recreated|Pulled|Built')

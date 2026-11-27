@@ -1,0 +1,3 @@
+---
+# Each entry: name (label), check (command, default "<name> --version"), hint (shown on failure)
+required_tools: []

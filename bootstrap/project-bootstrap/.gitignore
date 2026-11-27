@@ -1,0 +1,4 @@
+# Generated secrets - never commit
+.secrets/
+*.retry
+*.log

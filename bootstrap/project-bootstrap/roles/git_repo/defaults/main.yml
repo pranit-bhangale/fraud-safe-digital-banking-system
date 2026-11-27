@@ -1,0 +1,4 @@
+---
+git_settings: {}   # init, branch, gitignore, initial_commit, commit_message, user_name, user_email
+git_repos: []      # {repo, dest, version?, update?}  repositories to clone
+gitignore_extra: []

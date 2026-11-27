@@ -1,0 +1,105 @@
+---
+# ============================================================
+# Generic project bootstrap.
+#   Reads project.yml (+ optional project.<env_name>.yml overlay)
+#   and applies it in this order:
+#     prerequisites -> pre commands -> scaffold -> secrets/env
+#     -> git -> docker stacks -> post commands -> health checks
+#
+# Usage:
+#   ansible-playbook bootstrap.yml --check --diff     # dry run
+#   ansible-playbook bootstrap.yml                    # apply
+#   ansible-playbook bootstrap.yml -e env_name=prod   # also load project.prod.yml
+#   ansible-playbook bootstrap.yml --tags docker,health
+#   ansible-playbook bootstrap.yml --list-tags
+# ============================================================
+- name: Project bootstrap
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    features: {}   # replaced by the features block in project.yml
+
+  vars_files:
+    - project.yml
+
+  pre_tasks:
+    - name: Check for an environment overlay (project.<env_name>.yml)
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/project.{{ env_name | default('dev') }}.yml"
+      register: env_overlay
+      tags: [always]
+
+    - name: Load environment overlay (its keys replace the same keys from project.yml)
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/project.{{ env_name | default('dev') }}.yml"
+      when: env_overlay.stat.exists
+      tags: [always]
+
+    - name: Show what is about to run
+      ansible.builtin.debug:
+        msg:
+          - "Project : {{ project_name }}"
+          - "Root    : {{ project_root }}"
+          - "Env     : {{ env_name | default('dev') }}"
+      tags: [always]
+
+  tasks:
+    - name: Stage 1 - prerequisites
+      ansible.builtin.import_role:
+        name: prerequisites
+      when: features.prerequisites | default(true)
+      tags: [prereq]
+
+    - name: Stage 2 - pre commands
+      ansible.builtin.import_role:
+        name: commands
+      vars:
+        phase: pre
+      when: features.commands | default(true)
+      tags: [commands, pre]
+
+    - name: Stage 3 - scaffold (directories, files, templates)
+      ansible.builtin.import_role:
+        name: scaffold
+      when: features.scaffold | default(true)
+      tags: [scaffold]
+
+    - name: Stage 4 - secrets and .env files
+      ansible.builtin.import_role:
+        name: secrets_env
+      when: features.secrets_env | default(true)
+      tags: [env]
+
+    - name: Stage 5 - git repository
+      ansible.builtin.import_role:
+        name: git_repo
+      when: features.git | default(true)
+      tags: [git]
+
+    - name: Stage 6 - docker stacks
+      ansible.builtin.import_role:
+        name: docker_stack
+      when: features.docker | default(true)
+      tags: [docker]
+
+    - name: Stage 7 - post commands
+      ansible.builtin.import_role:
+        name: commands
+      vars:
+        phase: post
+      when: features.commands | default(true)
+      tags: [commands, post]
+
+    - name: Stage 8 - health checks
+      ansible.builtin.import_role:
+        name: health_checks
+      when: features.health | default(true)
+      tags: [health]
+
+  post_tasks:
+    - name: Summary
+      ansible.builtin.debug:
+        msg: "{{ ['Bootstrap of ' ~ project_name ~ ' finished.'] + (endpoints | default([])) }}"
+      tags: [always]

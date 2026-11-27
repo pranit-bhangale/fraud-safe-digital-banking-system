@@ -1,0 +1,34 @@
+---
+# Stop every docker stack listed in project.yml (in reverse order).
+#   ansible-playbook teardown.yml                        # stop, keep data volumes
+#   ansible-playbook teardown.yml -e remove_volumes=true # stop and DELETE volumes
+- name: Project teardown
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    remove_volumes: false
+
+  vars_files:
+    - project.yml
+
+  tasks:
+    - name: Stop docker stacks
+      ansible.builtin.shell:
+        cmd: >-
+          docker compose
+          -f {{ item.compose_file | quote }}
+          {% if item.project_name is defined %}-p {{ item.project_name | quote }}{% endif %}
+          {% if item.env_file is defined %}--env-file {{ item.env_file | quote }}{% endif %}
+          down {% if remove_volumes | bool %}-v{% endif %} --remove-orphans
+        chdir: "{{ item.project_dir | default(item.compose_file | dirname) }}"
+        executable: /bin/bash
+      environment:
+        COMPOSE_PROFILES: "*"
+      loop: "{{ (docker_stacks | default([])) | reverse | list }}"
+      loop_control:
+        label: "{{ item.name }}"
+      when: item.enabled | default(true)
+      register: stack_down
+      changed_when: stack_down.stderr is search('Removed|Stopped')
