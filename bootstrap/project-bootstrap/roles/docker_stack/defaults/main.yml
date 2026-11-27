@@ -1,9 +1,0 @@
----
-# Each stack:
-#   name, compose_file                (required)
-#   project_dir, project_name, env_file, profiles: []
-#   services: []                      (only start these)
-#   build: false, pull: always|missing|never
-#   wait: false, wait_timeout: 180    (--wait; leave false if the stack has one-shot init containers)
-#   enabled: true
-docker_stacks: []

@@ -1,4 +1,0 @@
----
-secrets_dir: "{{ playbook_dir }}/.secrets"   # generated once, reused on every run, gitignored
-secrets: []     # {name, length?}  -> available as secrets_map.<name>
-env_files: []   # {dest, vars: {KEY: value}, mode?, overwrite?}

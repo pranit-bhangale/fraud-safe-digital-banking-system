@@ -1,6 +1,0 @@
----
-# health_checks:
-#   ports:      [{name, host?, port, timeout?}]
-#   http:       [{name, url, status?, timeout?, delay?}]
-#   containers: [{name, timeout?}]      container must define a Docker healthcheck
-health_checks: {}
