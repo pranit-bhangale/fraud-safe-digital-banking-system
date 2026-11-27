@@ -11,9 +11,9 @@ spring:
     timeout-per-shutdown-phase: 30s
   # DATABASE CONFIGURATION
   datasource:
-    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:notification}
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:notification_db}
     username: ${DB_USERNAME:postgres}
-    password: ${DB_PASSWORD}
+    password: ${DB_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
     hikari:
       pool-name: NotificationPool
@@ -92,8 +92,8 @@ spring:
   mail:
     host: ${MAIL_HOST:smtp.gmail.com}
     port: ${MAIL_PORT:587}
-    username: ${MAIL_USERNAME}
-    password: ${MAIL_PASSWORD}
+    username: ${MAIL_USERNAME:pranitbhangale1453@gmail.com}
+    password: ${MAIL_PASSWORD:zvgbbkuwanmsbamh}
     protocol: smtp
     properties:
       mail:
