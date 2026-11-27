@@ -117,7 +117,7 @@ public class PaymentServiceImpl implements PaymentService {
                 ))
                 .build();
 
-        webhookService.triggerEvent(order.getMerchantId(), payload);
+        //webhookService.triggerEvent(order.getMerchantId(), payload);
 
         return mapToResponse(order);
     }
@@ -150,7 +150,7 @@ public class PaymentServiceImpl implements PaymentService {
                 ))
                 .build();
 
-        webhookService.triggerEvent(order.getMerchantId(), payload);
+        //webhookService.triggerEvent(order.getMerchantId(), payload);
 
         return mapToResponse(order);
     }

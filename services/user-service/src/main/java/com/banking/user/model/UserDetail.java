@@ -11,7 +11,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Collectors;
 
 @Builder
 public record UserDetail(
@@ -36,7 +35,7 @@ public record UserDetail(
         return roles.stream()
                 .map(role -> role.startsWith("ROLE_") ? role : "ROLE_" + role)
                 .map(SimpleGrantedAuthority::new)
-                .collect(Collectors.toUnmodifiableList());
+                .toList();
     }
 
     @Override

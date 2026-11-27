@@ -1,10 +1,6 @@
 package com.banking.user.service.impl;
 
-import com.banking.user.dto.AuthenticatedUser;
-import com.banking.user.dto.LoginRequest;
-import com.banking.user.dto.LoginResponse;
-import com.banking.user.dto.RegistrationRequest;
-import com.banking.user.dto.TokenResponse;
+import com.banking.user.dto.*;
 import com.banking.user.entity.Role;
 import com.banking.user.entity.User;
 import com.banking.user.event.NotificationEvent;
@@ -43,7 +39,6 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class AuthServiceImpl implements AuthService {
 
-    private static final String BEARER_PREFIX = "Bearer ";
     private static final Duration CLOCK_SKEW_BUFFER = Duration.ofMinutes(1);
 
     private final UserRepository userRepository;
