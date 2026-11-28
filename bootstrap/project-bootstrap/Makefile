@@ -8,6 +8,7 @@ help:
 	@echo "  make check                     Dry run (shows what would change)"
 	@echo "  make setup                     Apply the full bootstrap (start Java services sequentially)"
 	@echo "  make setup-client              Apply using the client configuration (my-cloud-platform)"
+	@echo "  make setup TAGS=database       Provision & verify databases only"
 	@echo "  make setup TAGS=services       Start only local services"
 	@echo "  make down                      Stop all services in reverse order (3 -> 2 -> 1)"
 	@echo "  make status                    Show status of managed service processes (PIDs/logs)"

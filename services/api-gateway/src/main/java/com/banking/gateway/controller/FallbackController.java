@@ -1,6 +1,12 @@
 package com.banking.gateway.controller;
 
 import com.banking.gateway.dto.GatewayErrorResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -17,9 +23,14 @@ import java.time.Instant;
 @Slf4j
 @RestController
 @RequestMapping("/fallback")
+@Tag(name = "Resilience4j Fallback Handlers", description = "Gateway circuit breaker fallback endpoints invoked when downstream microservices degrade or trip open")
 public class FallbackController {
 
     @RequestMapping("/user")
+    @Operation(summary = "User Service Fallback", description = "Invoked by Gateway circuit breaker when User Service fails or times out.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "503", description = "User Service temporarily unavailable", content = @Content(schema = @Schema(implementation = GatewayErrorResponse.class)))
+    })
     public ResponseEntity<GatewayErrorResponse> userFallback(HttpServletRequest request) {
         log.warn("Circuit Breaker triggered: User Service is currently unavailable. Path: {}",
                 request.getRequestURI());
@@ -29,6 +40,10 @@ public class FallbackController {
     }
 
     @RequestMapping("/account")
+    @Operation(summary = "Account Service Fallback", description = "Invoked by Gateway circuit breaker when Account Service fails or times out.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "503", description = "Account Service temporarily unavailable", content = @Content(schema = @Schema(implementation = GatewayErrorResponse.class)))
+    })
     public ResponseEntity<GatewayErrorResponse> accountFallback(HttpServletRequest request) {
         log.warn("Circuit Breaker triggered: Account Service is currently unavailable. Path: {}",
                 request.getRequestURI());
@@ -38,6 +53,10 @@ public class FallbackController {
     }
 
     @RequestMapping("/transaction")
+    @Operation(summary = "Transaction Service Fallback", description = "Invoked by Gateway circuit breaker when Transaction Service fails or times out.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "503", description = "Transaction Service temporarily unavailable", content = @Content(schema = @Schema(implementation = GatewayErrorResponse.class)))
+    })
     public ResponseEntity<GatewayErrorResponse> transactionFallback(HttpServletRequest request) {
         log.warn("Circuit Breaker triggered: Transaction Service is currently unavailable. Path: {}",
                 request.getRequestURI());
@@ -47,6 +66,10 @@ public class FallbackController {
     }
 
     @RequestMapping("/payment")
+    @Operation(summary = "Payment Service Fallback", description = "Invoked by Gateway circuit breaker when Payment Service fails or times out.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "503", description = "Payment Service temporarily unavailable", content = @Content(schema = @Schema(implementation = GatewayErrorResponse.class)))
+    })
     public ResponseEntity<GatewayErrorResponse> paymentFallback(HttpServletRequest request) {
         log.warn("Circuit Breaker triggered: Payment Service is currently unavailable. Path: {}",
                 request.getRequestURI());
@@ -56,6 +79,10 @@ public class FallbackController {
     }
 
     @RequestMapping("/default")
+    @Operation(summary = "Default Downstream Fallback", description = "Invoked by Gateway circuit breaker for unspecified downstream failures.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "503", description = "Downstream service temporarily unavailable", content = @Content(schema = @Schema(implementation = GatewayErrorResponse.class)))
+    })
     public ResponseEntity<GatewayErrorResponse> defaultFallback(HttpServletRequest request) {
         log.warn("Circuit Breaker triggered: Downstream service is currently unavailable. Path: {}",
                 request.getRequestURI());

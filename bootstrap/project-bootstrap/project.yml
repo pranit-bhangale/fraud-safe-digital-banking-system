@@ -13,10 +13,22 @@ features:
   prerequisites: true
   scaffold: false      # files already exist in repository
   secrets_env: true    # ensures .env with safe defaults is generated
-  git: false           # repository already initialized
+  database: true       # checks/provisions postgres databases before starting services
   services: true       # launches Java microservices sequentially
   commands: false
   health: true         # verifies local service readiness
+
+# PostgreSQL Database Provisioning & Readiness Barrier (Pure Local - Zero Docker)
+# Configured via dedicated external YAML file: databases.yml
+database_provisioning:
+  enabled: true
+  config_file: "{{ playbook_dir }}/databases.yml"
+  host: "{{ global_env.DB_HOST | default('127.0.0.1') }}"
+  port: "{{ global_env.DB_PORT | default('5434') }}"
+  username: "{{ global_env.DB_USERNAME | default('postgres') }}"
+  password: "{{ global_env.DB_PASSWORD | default('postgres') }}"
+  default_db: "postgres"
+  psql_binary: "psql"
 
 # Global baseline environment injected into every service
 global_env:
@@ -38,9 +50,6 @@ global_env:
   PUBLIC_KEY_PATH: "{{ project_root }}/services/user-service/src/main/resources/key/public_key.pem"
 
 required_tools:
-  - name: git
-    check: git --version
-    hint: "Install Git."
   - name: java
     check: java -version
     hint: "Install JDK 21+ or JDK 25 for Spring Boot 4.2."

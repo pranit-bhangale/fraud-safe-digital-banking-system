@@ -39,6 +39,7 @@ bootstrap/project-bootstrap/
 ├── bootstrap.yml                  # Main orchestrator playbook (Stages 1 through 8)
 ├── teardown.yml                   # Safe reverse teardown playbook
 ├── project.yml                    # Default Java digital banking configuration (Zero Docker)
+├── databases.yml                  # Database specifications (which database to create with which name/owner)
 ├── project.client.yml             # Polyglot client platform configuration
 ├── project.prod.yml               # Production overlay configuration
 ├── .gitignore                     # Ignores .secrets/, .pids/, logs/, etc.
@@ -52,7 +53,7 @@ bootstrap/project-bootstrap/
     ├── commands/                  # Pre- and post-setup shell hooks
     ├── scaffold/                  # Filesystem directories, files, symlinks, templates
     ├── secrets_env/               # Idempotent secret generation and .env templating
-    ├── git_repo/                  # Git repository init and submodules
+    ├── database_provisioning/     # Checks PostgreSQL & auto-provisions missing databases before startup
     ├── services_manager/          # Sequential service start, health barrier, reverse stop
     └── health_checks/             # Post-boot global port and HTTP health validation
 ```
@@ -140,15 +141,21 @@ ansible-playbook bootstrap.yml -e @project.client.yml
 #### What happens during execution:
 1. **Prerequisites Check**: Verifies required tools (`git`, `java`, etc.).
 2. **Environment Files**: Ensures `.env` exists with required variables.
-3. **Sequential Service Loop (1 &rarr; N)**:
+3. **Database Readiness & Provisioning Barrier (Zero Docker - Pure Local)**:
+   - Reads database specifications from `databases.yml` (specifying database name, owner, and associated microservice).
+   - Connects directly to local PostgreSQL instance via TCP (`DB_HOST:DB_PORT`) using `psql`.
+   - Executes a single-pass O(1) query on `pg_database` without container runtime dependencies.
+   - Computes set difference and idempotently creates missing databases using their configured name and owner.
+   - **Guarantees microservices only launch after their local persistence stores exist.**
+4. **Sequential Service Loop (1 &rarr; N)**:
    - Sets environment (`global_env` + service `env`).
    - Launches process in background with `nohup`.
    - Writes process ID to `.pids/<service-name>.pid`.
    - Streams standard output and errors to `logs/<service-name>.log`.
    - **Health Barrier**: Polls the TCP port and HTTP `health_url` until healthy.
    - **Next service starts only after the previous service is confirmed healthy.**
-4. **Final Check**: The edge gateway (`api-gateway` or `web-gateway`) runs a dedicated end-to-end verification probe.
-5. **Summary Banner**: Displays active endpoints.
+5. **Final Check**: The edge gateway (`api-gateway` or `web-gateway`) runs a dedicated end-to-end verification probe.
+6. **Summary Banner**: Displays active endpoints.
 
 ---
 
@@ -211,6 +218,9 @@ Once `make setup` completes, open the services in your browser or make API reque
 If you only want to restart or run specific stages of the playbook:
 
 ```bash
+# Provision and verify missing PostgreSQL databases only
+make setup TAGS=database
+
 # Run only the services stage (starts local services)
 make setup TAGS=services
 

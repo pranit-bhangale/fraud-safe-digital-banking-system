@@ -1,0 +1,118 @@
+---
+# ============================================================
+# Pure Local PostgreSQL Database Readiness & Provisioning Barrier
+# Zero Docker - Native Host Execution
+# ============================================================
+# 1. Loads external database specifications from databases.yml (or configured file).
+# 2. Checks local PostgreSQL TCP connectivity on host.
+# 3. Performs a single-pass O(1) query against pg_database.
+# 4. Computes missing databases via set difference.
+# 5. Idempotently creates missing databases with configured name and owner.
+# 6. Gates microservice startup until all databases are verified.
+# ============================================================
+
+- name: Extract database provisioning configuration
+  ansible.builtin.set_fact:
+    db_prov: "{{ database_provisioning | default({}) }}"
+
+# --- 1. Load External Database Specifications from YAML file ---
+- name: Determine databases configuration file path
+  ansible.builtin.set_fact:
+    db_config_file: "{{ db_prov.config_file | default(playbook_dir ~ '/databases.yml') }}"
+
+- name: Check if external databases YAML file exists
+  ansible.builtin.stat:
+    path: "{{ db_config_file }}"
+  register: db_config_file_stat
+
+- name: Load database definitions from YAML file
+  ansible.builtin.include_vars:
+    file: "{{ db_config_file }}"
+    name: external_db_config
+  when: db_config_file_stat.stat.exists
+
+- name: Normalize target databases list
+  ansible.builtin.set_fact:
+    target_databases: >-
+      {%- set raw_dbs = (external_db_config.databases if (db_config_file_stat.stat.exists and external_db_config.databases is defined) else (db_prov.databases | default([]))) -%}
+      {%- set normalized = [] -%}
+      {%- for db in raw_dbs -%}
+        {%- if db is mapping -%}
+          {%- set _ = normalized.append({'name': db.name, 'owner': db.owner | default(db_prov.username | default('postgres')), 'service': db.service | default(''), 'description': db.description | default('')}) -%}
+        {%- else -%}
+          {%- set _ = normalized.append({'name': db, 'owner': db_prov.username | default('postgres'), 'service': '', 'description': ''}) -%}
+        {%- endif -%}
+      {%- endfor -%}
+      {{ normalized }}
+
+- name: Extract target database names
+  ansible.builtin.set_fact:
+    target_db_names: "{{ target_databases | map(attribute='name') | list }}"
+
+- name: Display database provisioning plan
+  ansible.builtin.debug:
+    msg:
+      - "Config File         : {{ db_config_file if db_config_file_stat.stat.exists else 'Inline defaults (no file found)' }}"
+      - "Target Host         : {{ db_prov.host | default('127.0.0.1') }}:{{ db_prov.port | default(5434) }}"
+      - "Default Owner       : {{ db_prov.username | default('postgres') }}"
+      - "Databases to verify : {{ target_db_names }}"
+
+# --- 2. Readiness Verification ---
+- name: Wait for local PostgreSQL port readiness
+  ansible.builtin.wait_for:
+    host: "{{ db_prov.host | default('127.0.0.1') }}"
+    port: "{{ db_prov.port | default(5434) }}"
+    timeout: 30
+
+# --- 3. Single-Pass O(1) Database Inspection ---
+- name: Query existing databases from local PostgreSQL
+  ansible.builtin.command: >
+    {{ db_prov.psql_binary | default('psql') }}
+    -h {{ db_prov.host | default('127.0.0.1') }}
+    -p {{ db_prov.port | default(5434) }}
+    -U {{ db_prov.username | default('postgres') }}
+    -d {{ db_prov.default_db | default('postgres') }}
+    -tAc "SELECT datname FROM pg_database WHERE datistemplate = false;"
+  environment:
+    PGPASSWORD: "{{ db_prov.password | default('postgres') }}"
+  register: existing_dbs_raw
+  changed_when: false
+
+- name: Parse existing database list
+  ansible.builtin.set_fact:
+    existing_databases: "{{ existing_dbs_raw.stdout_lines | map('trim') | reject('eq', '') | list }}"
+
+- name: Calculate missing database names via set difference
+  ansible.builtin.set_fact:
+    missing_db_names: "{{ target_db_names | difference(existing_databases) }}"
+
+- name: Filter missing database specifications
+  ansible.builtin.set_fact:
+    missing_db_objects: "{{ target_databases | selectattr('name', 'in', missing_db_names) | list }}"
+
+- name: Display database inspection results
+  ansible.builtin.debug:
+    msg:
+      - "Required Databases : {{ target_db_names }}"
+      - "Existing Databases : {{ existing_databases }}"
+      - "Missing to Create  : {{ missing_db_names if missing_db_names | length > 0 else 'None (All databases already exist)' }}"
+
+# --- 4. Idempotent Creation of Missing Databases with Configured Name & Owner ---
+- name: Create missing local PostgreSQL databases
+  ansible.builtin.command: >
+    {{ db_prov.psql_binary | default('psql') }}
+    -h {{ db_prov.host | default('127.0.0.1') }}
+    -p {{ db_prov.port | default(5434) }}
+    -U {{ db_prov.username | default('postgres') }}
+    -d {{ db_prov.default_db | default('postgres') }}
+    -c "CREATE DATABASE \"{{ item.name }}\" OWNER \"{{ item.owner }}\";"
+  environment:
+    PGPASSWORD: "{{ db_prov.password | default('postgres') }}"
+  loop: "{{ missing_db_objects }}"
+  when: missing_db_objects | length > 0
+  register: db_create
+  changed_when: true
+
+- name: Confirmation - All local databases ready
+  ansible.builtin.debug:
+    msg: "PostgreSQL readiness barrier passed: All {{ target_db_names | length }} databases (configured in {{ db_config_file }}) exist and are ready. Proceeding to service orchestration."

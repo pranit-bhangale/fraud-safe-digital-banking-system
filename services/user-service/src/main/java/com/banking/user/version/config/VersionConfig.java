@@ -13,7 +13,7 @@ public class VersionConfig implements WebMvcConfigurer {
         configurer
                 .useRequestHeader("X-API-Version")
                 .setVersionParser(new VersionParser())
-                .addSupportedVersions("v1")
+                .addSupportedVersions("v1", "v2")
                 .setDefaultVersion("v1")
                 .detectSupportedVersions(false);
     }

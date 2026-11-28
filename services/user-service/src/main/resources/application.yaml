@@ -1,6 +1,9 @@
 spring:
   application:
     name: user-service
+  threads:
+    virtual:
+      enabled: true
   config:
     import: "optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
   lifecycle:
@@ -116,6 +119,16 @@ info:
     name: user-service
     description: User Management Service
     version: 1.0.0
+# SPRINGDOC OPENAPI CONFIGURATION
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    operations-sorter: method
+    tags-sorter: alpha
 # LOGGING CONFIGURATION
 logging:
   file:

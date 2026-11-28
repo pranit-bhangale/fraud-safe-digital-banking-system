@@ -154,8 +154,9 @@ Content-Type: application/json
 
 ### Initiate Transaction
 ```http
-POST {{base_url}}/api/v1/transactions
+POST {{base_url}}/api/transactions
 Authorization: Bearer {{auth_token}}
+X-API-Version: v1
 Content-Type: application/json
 ```
 
@@ -173,14 +174,16 @@ Content-Type: application/json
 
 ### Get Transaction by Reference
 ```http
-GET {{base_url}}/api/v1/transactions/TXN-abc123def456
+GET {{base_url}}/api/transactions/TXN-abc123def456
 Authorization: Bearer {{auth_token}}
+X-API-Version: v1
 ```
 
 ### Get Transaction by ID
 ```http
-GET {{base_url}}/api/v1/transactions/id/880e8400-e29b-41d4-a716-446655440003
+GET {{base_url}}/api/transactions/id/880e8400-e29b-41d4-a716-446655440003
 Authorization: Bearer {{auth_token}}
+X-API-Version: v1
 ```
 
 ---
@@ -189,8 +192,9 @@ Authorization: Bearer {{auth_token}}
 
 ### Create Payment Order
 ```http
-POST {{base_url}}/api/v1/payments
+POST {{base_url}}/api/payments
 Authorization: Bearer {{auth_token}}
+X-API-Version: v1
 Content-Type: application/json
 Idempotency-Key: {{uuid}}
 ```
@@ -207,20 +211,23 @@ Idempotency-Key: {{uuid}}
 
 ### Get Payment Order
 ```http
-GET {{base_url}}/api/v1/payments/ORD-xyz789uvw012
+GET {{base_url}}/api/payments/ORD-xyz789uvw012
 Authorization: Bearer {{auth_token}}
+X-API-Version: v1
 ```
 
 ### Process Payment (Checkout)
 ```http
-POST {{base_url}}/api/v1/payments/ORD-xyz789uvw012/pay
+POST {{base_url}}/api/payments/ORD-xyz789uvw012/pay
 Authorization: Bearer {{auth_token}}
+X-API-Version: v1
 ```
 
 ### Subscribe to Webhooks (Merchant)
 ```http
-POST {{base_url}}/api/v1/webhooks/subscribe
+POST {{base_url}}/api/webhooks/subscriptions
 Authorization: Bearer {{merchant_token}}
+X-API-Version: v1
 Content-Type: application/json
 ```
 
@@ -322,7 +329,11 @@ GET {{base_url}}/api/agent/health
 Authorization: Bearer {{auth_token}}
 Content-Type: application/json
 Accept: application/json
+X-API-Version: v1
+X-Correlation-Id: {{uuid}}
 ```
+
+> **API Versioning Architecture**: All API versioning is passed strictly via the `X-API-Version` HTTP header (defaults to `v1`). URL paths remain clean (e.g. `/api/transactions`, `/api/payments`) without version path prefixes.
 
 ### Idempotency (for create operations)
 ```http

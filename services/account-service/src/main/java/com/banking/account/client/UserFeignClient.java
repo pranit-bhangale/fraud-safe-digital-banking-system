@@ -23,13 +23,13 @@ public interface UserFeignClient {
 
     Logger LOG = LoggerFactory.getLogger(UserFeignClient.class);
 
-    @GetMapping(value = "/internal/users/{userId}/exists", version = "v2")
+    @GetMapping("/internal/users/{userId}/exists")
     @CircuitBreaker(name = "userService", fallbackMethod = "existsByUserIdFallback")
     @Retry(name = "userService")
     @TimeLimiter(name = "userService")
     CompletableFuture<Boolean> existsByUserId(@PathVariable UUID userId);
 
-    @GetMapping(value = "/internal/users/{userId}", version = "v2")
+    @GetMapping("/internal/users/{userId}")
     @CircuitBreaker(name = "userService", fallbackMethod = "getUserByIdFallback")
     @Retry(name = "userService")
     @TimeLimiter(name = "userService")

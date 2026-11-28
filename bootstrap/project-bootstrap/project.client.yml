@@ -1,10 +1,4 @@
 ---
-# ============================================================
-# Client Configuration: my-cloud-platform
-# Location: <repo>/bootstrap/project-bootstrap/project.client.yml
-# Usage:
-#   ansible-playbook bootstrap.yml -e @project.client.yml
-# ============================================================
 project_name: my-cloud-platform
 service_manager: local_process    # 'local_process' for dev / non-root, or 'systemd' for production Linux
 project_root: "/var/www"

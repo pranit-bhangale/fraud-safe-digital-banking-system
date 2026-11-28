@@ -13,6 +13,8 @@ public class FeignClientConfiguration {
     @Bean
     public RequestInterceptor interceptor() {
         return requestTemplate -> {
+            requestTemplate.header("X-API-Version", "v1");
+            requestTemplate.header("X-Internal-Service", "transaction-service");
             ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
             if (attributes != null) {
                 String authorization = attributes.getRequest().getHeader(HttpHeaders.AUTHORIZATION);

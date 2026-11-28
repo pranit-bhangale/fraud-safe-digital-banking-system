@@ -21,7 +21,7 @@ public class RateLimiterService {
     public boolean isAllowed(HttpServletRequest request) {
         String key = resolveKey(request);
         String path = request.getRequestURI();
-        long limit = path.startsWith("/api/v1/transactions") ? 20 : 50;
+        long limit = path.contains("/transactions") ? 20 : 50;
         try {
             Long currentCount = redisTemplate.opsForValue().increment("rl:" + key);
             if (currentCount != null && currentCount == 1) {
