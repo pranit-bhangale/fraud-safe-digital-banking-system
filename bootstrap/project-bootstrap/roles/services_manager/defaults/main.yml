@@ -1,0 +1,10 @@
+---
+service_manager: local_process  # 'local_process' or 'systemd'
+global_env: {}
+local_services: []
+services_pid_dir: "{{ project_root }}/.pids"
+services_log_dir: "{{ project_root }}/logs"
+services_systemd_dir: "/etc/systemd/system"
+systemd_service_prefix: "{{ project_name }}"
+services_default_startup_timeout: 60
+services_stop_timeout: 15

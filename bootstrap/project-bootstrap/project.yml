@@ -1,0 +1,193 @@
+---
+# ============================================================
+# Default Project Configuration: Fraud-Safe Digital Banking
+# Location: <repo>/bootstrap/project-bootstrap/project.yml
+# Mode: Local Development (Zero Docker)
+# ============================================================
+project_name: fraud-safe-digital-banking-system
+env_name: dev
+service_manager: local_process    # 'local_process' for dev / non-root, or 'systemd' for production Linux
+project_root: "{{ (playbook_dir ~ '/../..') | realpath }}"
+
+features:
+  prerequisites: true
+  scaffold: false      # files already exist in repository
+  secrets_env: true    # ensures .env with safe defaults is generated
+  database: true       # checks/provisions postgres databases before starting services
+  services: true       # launches Java microservices sequentially
+  commands: false
+  health: true         # verifies local service readiness
+
+# PostgreSQL Database Provisioning & Readiness Barrier (Pure Local - Zero Docker)
+# Configured via dedicated external YAML file: databases.yml
+database_provisioning:
+  enabled: true
+  config_file: "{{ playbook_dir }}/databases.yml"
+  host: "{{ global_env.DB_HOST | default('127.0.0.1') }}"
+  port: "{{ global_env.DB_PORT | default('5434') }}"
+  username: "{{ global_env.DB_USERNAME | default('postgres') }}"
+  password: "{{ global_env.DB_PASSWORD | default('postgres') }}"
+  default_db: "postgres"
+  psql_binary: "psql"
+
+# Global baseline environment injected into every service
+global_env:
+  ENVIRONMENT: "development"
+  LOG_LEVEL: "INFO"
+  SPRING_PROFILES_ACTIVE: "dev"
+  CONFIG_SERVER_URL: "http://127.0.0.1:8888"
+  EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: "http://127.0.0.1:8761/eureka/"
+  DB_HOST: "127.0.0.1"
+  DB_PORT: "5434"
+  DB_USERNAME: "postgres"
+  DB_PASSWORD: "postgres"
+  REDIS_HOST: "127.0.0.1"
+  REDIS_PORT: "6379"
+  REDIS_PASSWORD: "postgres"
+  RABBITMQ_HOST: "127.0.0.1"
+  RABBITMQ_PORT: "5672"
+  KAFKA_BOOTSTRAP_SERVERS: "127.0.0.1:9092"
+  PUBLIC_KEY_PATH: "{{ project_root }}/services/user-service/src/main/resources/key/public_key.pem"
+
+required_tools:
+  - name: java
+    check: java -version
+    hint: "Install JDK 21+ or JDK 25 for Spring Boot 4.2."
+
+# Auto-generated .env in project root if missing
+env_files:
+  - dest: "{{ project_root }}/.env"
+    overwrite: false
+    vars:
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: bank
+      REDIS_PASSWORD: postgres
+      RABBITMQ_USER: guest
+      RABBITMQ_PASSWORD: guest
+      KAFKA_PORT: 9092
+      KAFKA_ADVERTISED_HOST: localhost
+
+# Sequential order of Java Microservices:
+# Starts: 1 (Config) -> 2 (Eureka) -> 3 (User) -> 4 (Account) -> 5 (Fraud) -> 6 (Txn) -> 7 (Payment) -> 8 (Notification) -> 9 (Gateway)
+# Stops : 9 -> 8 -> 7 -> 6 -> 5 -> 4 -> 3 -> 2 -> 1
+local_services:
+  # 1. Config Server (Source of truth for all service configurations)
+  - name: config-server
+    display_name: "Spring Cloud Config Server"
+    directory: "{{ project_root }}/services/config-server"
+    exec_start: "./gradlew bootRun"
+    port: 8888
+    health_url: "http://127.0.0.1:8888/actuator/health"
+    startup_timeout: 90
+    env:
+      PORT: "8888"
+
+  # 2. Service Registry (Netflix Eureka Discovery Server)
+  - name: service-registry
+    display_name: "Netflix Eureka Service Registry"
+    directory: "{{ project_root }}/services/service-registry"
+    exec_start: "./gradlew bootRun"
+    port: 8761
+    health_url: "http://127.0.0.1:8761/actuator/health"
+    startup_timeout: 90
+    env:
+      PORT: "8761"
+
+  # 3. User & Authentication Service (JWT Provider)
+  - name: user-service
+    display_name: "User & Authentication Service"
+    directory: "{{ project_root }}/services/user-service"
+    exec_start: "./gradlew bootRun"
+    port: 8081
+    health_url: "http://127.0.0.1:8081/actuator/health"
+    startup_timeout: 90
+    env:
+      PORT: "8081"
+
+  # 4. Account Service (Balance & Ledgers)
+  - name: account-service
+    display_name: "Account Management Service"
+    directory: "{{ project_root }}/services/account-service"
+    exec_start: "./gradlew bootRun"
+    port: 8082
+    health_url: "http://127.0.0.1:8082/actuator/health"
+    startup_timeout: 90
+    env:
+      PORT: "8082"
+
+  # 5. Fraud Detection Service (Kafka Event Processor)
+  - name: fraud-detection
+    display_name: "Real-time Fraud Detection Engine"
+    directory: "{{ project_root }}/services/fraud-detection"
+    exec_start: "./gradlew bootRun"
+    port: 8084
+    health_url: "http://127.0.0.1:8084/actuator/health"
+    startup_timeout: 90
+    env:
+      PORT: "8084"
+
+  # 6. Transaction Service (Saga Coordinator)
+  - name: transaction-service
+    display_name: "Transaction & Saga Service"
+    directory: "{{ project_root }}/services/transaction-service"
+    exec_start: "./gradlew bootRun"
+    port: 8083
+    health_url: "http://127.0.0.1:8083/actuator/health"
+    startup_timeout: 90
+    env:
+      PORT: "8083"
+      GRPC_PORT: "9090"
+
+  # 7. Payment Service
+  - name: payment-service
+    display_name: "Payment Processing Service"
+    directory: "{{ project_root }}/services/payment-service"
+    exec_start: "./gradlew bootRun"
+    port: 8085
+    health_url: "http://127.0.0.1:8085/actuator/health"
+    startup_timeout: 90
+    env:
+      PORT: "8085"
+
+  # 8. Notification Service
+  - name: notification-service
+    display_name: "Event Notification Service"
+    directory: "{{ project_root }}/services/notification-service"
+    exec_start: "./gradlew bootRun"
+    port: 8086
+    health_url: "http://127.0.0.1:8086/actuator/health"
+    startup_timeout: 90
+    env:
+      PORT: "8086"
+
+  # 9. API Gateway (Ingress proxy & router to all services)
+  - name: api-gateway
+    display_name: "Spring Cloud API Gateway"
+    directory: "{{ project_root }}/services/api-gateway"
+    exec_start: "./gradlew bootRun"
+    port: 8080
+    health_url: "http://127.0.0.1:8080/actuator/health"
+    startup_timeout: 90
+    is_final_check: true   # Dedicated final check verifying edge routing readiness
+    env:
+      PORT: "8080"
+
+# Service Health Verification
+health_checks:
+  ports:
+    - { name: Config Server, port: 8888 }
+    - { name: Eureka Registry, port: 8761 }
+    - { name: User Service, port: 8081 }
+    - { name: API Gateway, port: 8080 }
+
+endpoints:
+  - "API Gateway (Public Ingress):  http://localhost:8080"
+  - "Config Server:                 http://localhost:8888/actuator/health"
+  - "Service Registry (Eureka UI):  http://localhost:8761"
+  - "User Service Health:           http://localhost:8081/actuator/health"
+  - "Account Service Health:        http://localhost:8082/actuator/health"
+  - "Transaction Service Health:    http://localhost:8083/actuator/health"
+  - "Fraud Detection Health:        http://localhost:8084/actuator/health"
+  - "Payment Service Health:        http://localhost:8085/actuator/health"
+  - "Notification Service Health:   http://localhost:8086/actuator/health"

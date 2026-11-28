@@ -182,10 +182,11 @@ class DashboardApp:
             self.status_message = "Refreshed service status."
             self.status_style = "cyan"
         elif key == "s":
-            self.status_message = "Starting services..."
+            self.status_message = "Running interactive deployment..."
             self.status_style = "yellow"
             try:
-                self.controller.start(force_recreate=False)
+                from compose_pilot.ui.interactive_start import run_interactive_deployment
+                run_interactive_deployment(self.config, self.controller, force_recreate=False)
                 self._last_poll_time = 0.0
                 self.status_message = "Services started successfully."
                 self.status_style = "green"

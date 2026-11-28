@@ -266,11 +266,33 @@ class LifecycleController:
             self.wait_for_services()
 
     def stop(self) -> None:
-        """Stop and remove project containers."""
-        cmd = self.compose.get_base_cmd() + ["down"]
+        """Stop and remove project containers as well as any conflicting containers."""
+        cmd = self.compose.get_base_cmd() + ["down", "--remove-orphans"]
         res = run_command(cmd, check=False)
+        self.compose.remove_conflicting_containers()
         if res.returncode != 0:
             raise ComposePilotError(f"Failed to stop containers:\n{res.stderr or res.stdout}")
+
+    def stop_service(self, service: str, remove_volumes: bool = False) -> None:
+        """Stop and remove a specific service container and optionally its volumes."""
+        all_services = self.compose.get_services()
+        if service not in all_services:
+            raise ServiceNotFoundError(service, all_services)
+
+        cmd = self.compose.get_base_cmd() + ["stop", service]
+        run_command(cmd, check=False)
+        rm_cmd = self.compose.get_base_cmd() + ["rm", "-f", "-s"]
+        if remove_volumes:
+            rm_cmd.append("-v")
+        rm_cmd.append(service)
+        res = run_command(rm_cmd, check=False)
+        if res.returncode != 0:
+            raise ComposePilotError(f"Failed to stop service '{service}':\n{res.stderr or res.stdout}")
+
+        if remove_volumes:
+            for vol in self.compose.get_project_volumes():
+                if service in vol:
+                    run_command(["docker", "volume", "rm", "-f", vol], check=False)
 
     def get_endpoints(self) -> list[tuple[str, list[str]]]:
         """Return list of (service_name, [urls_or_network_status])."""

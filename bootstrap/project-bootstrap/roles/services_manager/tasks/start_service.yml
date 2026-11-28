@@ -1,0 +1,142 @@
+---
+- name: "Starting service [{{ service_index + 1 }}/{{ local_services | length }}]: {{ current_service.display_name | default(current_service.name) }}"
+  ansible.builtin.debug:
+    msg:
+      - "=========================================================="
+      - "Sequential Start Step {{ service_index + 1 }} of {{ local_services | length }}"
+      - "Service Name     : {{ current_service.name }}"
+      - "Display Name     : {{ current_service.display_name | default(current_service.name) }}"
+      - "Manager Mode     : {{ service_manager }}"
+      - "Directory        : {{ current_service.directory }}"
+      - "Exec Start       : {{ current_service.exec_start }}"
+      - "Health Endpoint  : {{ current_service.health_url | default('None') }}"
+      - "Port             : {{ current_service.port | default('None') }}"
+      - "Startup Timeout  : {{ current_service.startup_timeout | default(services_default_startup_timeout) }}s"
+      - "=========================================================="
+
+- name: Compute merged environment for {{ current_service.name }}
+  ansible.builtin.set_fact:
+    merged_service_env: "{{ (global_env | default({})) | combine(current_service.env | default({})) }}"
+
+# ----------------- SYSTEMD MODE -----------------
+- name: Deploy systemd unit and start service ({{ current_service.name }})
+  when: service_manager == 'systemd'
+  block:
+    - name: Render systemd service unit
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/templates/service.systemd.j2"
+        dest: "{{ services_systemd_dir }}/{{ systemd_service_prefix }}-{{ current_service.name }}.service"
+        mode: "0644"
+      become: true
+
+    - name: Reload systemd daemon
+      ansible.builtin.systemd:
+        daemon_reload: true
+      become: true
+
+    - name: Start and enable systemd service
+      ansible.builtin.systemd:
+        name: "{{ systemd_service_prefix }}-{{ current_service.name }}"
+        state: restarted
+        enabled: true
+      become: true
+
+# ----------------- LOCAL PROCESS MODE -----------------
+- name: Launch local background process ({{ current_service.name }})
+  when: service_manager == 'local_process'
+  block:
+    - name: Check for existing PID file for {{ current_service.name }}
+      ansible.builtin.stat:
+        path: "{{ services_pid_dir }}/{{ current_service.name }}.pid"
+      register: pid_stat
+
+    - name: Read existing PID
+      ansible.builtin.slurp:
+        path: "{{ services_pid_dir }}/{{ current_service.name }}.pid"
+      register: pid_raw
+      when: pid_stat.stat.exists
+
+    - name: Check if existing process is still alive
+      ansible.builtin.command:
+        cmd: "kill -0 {{ (pid_raw.content | b64decode | trim) }}"
+      register: proc_ping
+      failed_when: false
+      changed_when: false
+      when: pid_stat.stat.exists
+
+    - name: Gracefully terminate existing instance before restart
+      ansible.builtin.shell:
+        cmd: |
+          OLD_PID="{{ (pid_raw.content | b64decode | trim) }}"
+          kill -15 "$OLD_PID" 2>/dev/null || true
+          for i in $(seq 1 5); do
+            kill -0 "$OLD_PID" 2>/dev/null || exit 0
+            sleep 1
+          done
+          kill -9 "$OLD_PID" 2>/dev/null || true
+        executable: /bin/bash
+      when:
+        - pid_stat.stat.exists
+        - proc_ping.rc == 0
+
+    - name: Ensure target service directory exists
+      ansible.builtin.file:
+        path: "{{ current_service.directory }}"
+        state: directory
+        mode: "0755"
+
+    - name: Start process in background with nohup
+      ansible.builtin.shell:
+        cmd: >-
+          nohup {{ current_service.exec_start }}
+          >> {{ (services_log_dir ~ '/' ~ current_service.name ~ '.log') | quote }} 2>&1 &
+          echo $! > {{ (services_pid_dir ~ '/' ~ current_service.name ~ '.pid') | quote }}
+        chdir: "{{ current_service.directory }}"
+        executable: /bin/bash
+      environment: "{{ merged_service_env }}"
+      register: bg_start
+      changed_when: true
+
+# ----------------- HEALTH CHECK BARRIER -----------------
+# Next service will NOT start until this service is verified healthy
+- name: "Wait for TCP port {{ current_service.port }} (timeout: {{ current_service.startup_timeout | default(services_default_startup_timeout) }}s)"
+  ansible.builtin.wait_for:
+    host: "{{ current_service.host | default('127.0.0.1') }}"
+    port: "{{ current_service.port }}"
+    timeout: "{{ current_service.startup_timeout | default(services_default_startup_timeout) }}"
+  when: current_service.port is defined
+  check_mode: false
+
+- name: "Wait for health endpoint {{ current_service.health_url }}"
+  ansible.builtin.uri:
+    url: "{{ current_service.health_url }}"
+    status_code: "{{ current_service.expected_status | default([200]) }}"
+    timeout: 5
+  register: http_health
+  until: http_health is succeeded
+  retries: "{{ ((current_service.startup_timeout | default(services_default_startup_timeout)) / 3) | int }}"
+  delay: 3
+  when: current_service.health_url is defined
+  check_mode: false
+
+- name: Dedicated final verification check (is_final_check)
+  when: current_service.is_final_check | default(false)
+  block:
+    - name: Perform rigorous end-to-end check
+      ansible.builtin.uri:
+        url: "{{ current_service.health_url }}"
+        return_content: true
+        status_code: [200]
+        timeout: 10
+      register: final_probe
+      check_mode: false
+
+    - name: Announce final check verification success
+      ansible.builtin.debug:
+        msg:
+          - "****************************************************************"
+          - "*** FINAL VERIFICATION CHECK PASSED SUCCESSFULLY ***"
+          - "Service : {{ current_service.display_name | default(current_service.name) }}"
+          - "Health  : {{ current_service.health_url }} returned HTTP 200"
+          - "Stack is fully initialized, sequential dependency pipeline complete."
+          - "****************************************************************"

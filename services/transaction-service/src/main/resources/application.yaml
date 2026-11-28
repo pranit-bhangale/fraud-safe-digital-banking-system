@@ -1,5 +1,179 @@
 spring:
   application:
     name: transaction-service
+  threads:
+    virtual:
+      enabled: true
   config:
     import: "optional:configserver:${CONFIG_SERVER_URL:http://localhost:8888}"
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          public-key-location: ${PUBLIC_KEY_PATH:key/public_key.pem}
+  # Database Configuration
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:transaction_db}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: TransactionPool
+      minimum-idle: 5
+      maximum-pool-size: 10
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  # JPA CONFIGURATION
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+        jdbc:
+          time_zone: UTC
+  # FLYWAY CONFIGURATION
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    table: flyway_schema_history
+    baseline-on-migrate: true
+    baseline-version: 1
+    validate-on-migrate: true
+    clean-disabled: true
+    out-of-order: false
+  cloud:
+    function:
+      definition: fraudAckConsumer
+    stream:
+      default-binder: kafka
+      bindings:
+        # Outbound payment initiated event to fraud detection
+        transactionInitiated-out-0:
+          destination: ${TOPIC_PAYMENT_INITIATED:banking.payment.initiated.v1}
+          contentType: application/json
+        # Inbound fraud evaluation ack from fraud detection
+        fraudAckConsumer-in-0:
+          destination: ${TOPIC_PAYMENT_FRAUD_ACK:banking.payment.fraud-ack.v1}
+          group: transaction-service-group
+          contentType: application/json
+          consumer:
+            concurrency: ${TRANSACTION_CONSUMER_CONCURRENCY:6}
+            max-attempts: 3
+      kafka:
+        binder:
+          brokers: ${KAFKA_BROKERS:localhost:29092}
+          auto-create-topics: ${KAFKA_AUTO_CREATE_TOPICS:false}
+          min-partition-count: ${KAFKA_TOPIC_PARTITIONS:6}
+          replication-factor: ${KAFKA_REPLICATION_FACTOR:1}
+        bindings:
+          transactionInitiated-out-0:
+            producer:
+              sync: false
+              configuration:
+                acks: all
+                enable.idempotence: true
+                compression.type: lz4
+          fraudAckConsumer-in-0:
+            consumer:
+              start-offset: earliest
+              auto-commit-offset: true
+              configuration:
+                max.poll.records: 50
+                max.poll.interval.ms: 300000
+                session.timeout.ms: 15000
+                heartbeat.interval.ms: 3000
+                partition.assignment.strategy: org.apache.kafka.clients.consumer.CooperativeStickyAssignor
+cors:
+  allowed-origins:
+    - ${CORS_ALLOWED_ORIGIN}
+  allowed-methods:
+    - GET
+    - POST
+    - PUT
+    - DELETE
+    - OPTIONS
+    - PATCH
+    - HEAD
+  allowed-headers:
+    - Content-Type
+    - X-API-Version
+    - Accept
+    - Origin
+    - Access-Control-Request-Method
+    - Access-Control-Request-Headers
+  allow-credentials: true
+# EUREKA SERVICE DISCOVERY
+eureka:
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${random.value}
+  client:
+    fetch-registry: true
+    register-with-eureka: true
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+# ACTUATOR AND HEALTH CHECKS
+management:
+  endpoints:
+    web:
+      exposure:
+        include:
+          - health
+          - info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+      readinessstate:
+        enabled: true
+      show-details: never
+  health:
+    mail:
+      enabled: false
+# APPLICATION INFORMATION
+info:
+  app:
+    name: transaction-service
+    description: Transaction Management Service
+    version: 1.0.0
+# SPRINGDOC OPENAPI CONFIGURATION
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    operations-sorter: method
+    tags-sorter: alpha
+# LOGGING CONFIGURATION
+logging:
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: ${LOG_PATH:logs/transaction-service.log}
+  level:
+    root: ${LOG_LEVEL_ROOT:INFO}
+    com.banking.transaction: ${LOG_LEVEL:INFO}
+    org.hibernate.SQL: WARN
+  logback:
+    rollingpolicy:
+      file-name-pattern: ${LOG_PATH:logs/transaction-service.log}.%d{yyyy-MM-dd}.%i.log.gz
+      max-file-size: 50MB
+      total-size-cap: 1GB
+      max-history: 30
+      clean-history-on-start: false
+server:
+  port: ${PORT:8083}
+  shutdown: graceful
+
+grpc:
+  server:
+    port: ${GRPC_PORT:9090}

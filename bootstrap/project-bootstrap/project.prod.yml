@@ -1,0 +1,15 @@
+---
+# ============================================================
+# Production Overlay
+# Location: <repo>/bootstrap/project-bootstrap/project.prod.yml
+# Usage:
+#   ansible-playbook bootstrap.yml -e env_name=prod
+# ============================================================
+env_name: prod
+service_manager: systemd
+
+global_env:
+  ENVIRONMENT: "production"
+  LOG_LEVEL: "WARN"
+  SPRING_PROFILES_ACTIVE: "prod"
+  JAVA_TOOL_OPTIONS: "-XX:+UseZGC -XX:+ZGenerational -Xms2g -Xmx4g"

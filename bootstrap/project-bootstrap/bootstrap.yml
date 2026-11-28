@@ -1,0 +1,103 @@
+---
+- name: Local Development Service Orchestrator
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    features: { }
+
+  vars_files:
+    - project.yml
+
+  pre_tasks:
+    - name: Detect environment overlay file
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/project.{{ env_name | default('dev') }}.yml"
+      register: env_overlay_file
+      tags: [ always ]
+
+    - name: Load environment overlay if present
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/project.{{ env_name | default('dev') }}.yml"
+      when: env_overlay_file.stat.exists
+      tags: [ always ]
+
+    - name: Display execution plan
+      ansible.builtin.debug:
+        msg:
+          - "=========================================================="
+          - "Project Name     : {{ project_name }}"
+          - "Environment      : {{ env_name | default('dev') }}"
+          - "Project Root     : {{ project_root }}"
+          - "Service Manager  : {{ service_manager | default('local_process') }}"
+          - "Total Services   : {{ (local_services | default([])) | length }}"
+          - "=========================================================="
+      tags: [ always ]
+
+  tasks:
+    - name: Stage 1 - Prerequisites verification
+      ansible.builtin.import_role:
+        name: prerequisites
+      when: features.prerequisites | default(true)
+      tags: [ prereq ]
+
+    - name: Stage 2 - Pre-setup commands
+      ansible.builtin.import_role:
+        name: commands
+      vars:
+        phase: pre
+      when: features.commands | default(true)
+      tags: [ commands, pre ]
+
+    - name: Stage 3 - Filesystem scaffolding
+      ansible.builtin.import_role:
+        name: scaffold
+      when: features.scaffold | default(true)
+      tags: [ scaffold ]
+
+    - name: Stage 4 - Secrets & .env files
+      ansible.builtin.import_role:
+        name: secrets_env
+      when: features.secrets_env | default(true)
+      tags: [ env ]
+
+    - name: Stage 5 - Local PostgreSQL database provisioning & readiness barrier
+      ansible.builtin.import_role:
+        name: database_provisioning
+      when: features.database | default(true)
+      tags: [ database, db ]
+
+    - name: Stage 6 - Sequential service orchestration (1 -> 2 -> 3)
+      ansible.builtin.import_role:
+        name: services_manager
+      vars:
+        action: start
+      when: features.services | default(true)
+      tags: [ services ]
+
+    - name: Stage 7 - Post-setup commands
+      ansible.builtin.import_role:
+        name: commands
+      vars:
+        phase: post
+      when: features.commands | default(true)
+      tags: [ commands, post ]
+
+    - name: Stage 8 - Comprehensive health checks
+      ansible.builtin.import_role:
+        name: health_checks
+      when: features.health | default(true)
+      tags: [ health ]
+
+  post_tasks:
+    - name: Execution Summary
+      ansible.builtin.debug:
+        msg:
+          - "=========================================================="
+          - " Setup for '{{ project_name }}' completed successfully! "
+          - " All local services healthy and verified. "
+          - "=========================================================="
+          - "Active Endpoints:"
+          - "{{ endpoints | default(['No endpoints defined.']) }}"
+      tags: [ always ]

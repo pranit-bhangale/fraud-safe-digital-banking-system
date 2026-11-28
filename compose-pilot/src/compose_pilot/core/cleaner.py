@@ -70,6 +70,7 @@ class EnvironmentCleaner:
         if clean_volumes:
             down_cmd.append("-v")
         run_command(down_cmd, check=False)
+        self.compose.remove_conflicting_containers()
         log("Containers stopped and removed")
 
         # 4. Clean persistent volumes

@@ -1,0 +1,31 @@
+---
+databases:
+  # 1. User & Authentication Service Database
+  - name: user_db
+    owner: postgres
+    service: user-service
+    description: "Database for User profiles, authentication credentials, and roles"
+
+  # 2. Account Service Database
+  - name: account_db
+    owner: postgres
+    service: account-service
+    description: "Database for Account ledgers, balances, and customer accounts"
+
+  # 3. Transaction Service Database
+  - name: transaction_db
+    owner: postgres
+    service: transaction-service
+    description: "Database for Transaction records, Saga coordinator state, and outbox events"
+
+  # 4. Payment Service Database
+  - name: payment_db
+    owner: postgres
+    service: payment-service
+    description: "Database for Payment processing, idempotency keys, and webhook subscriptions"
+
+  # 5. Notification Service Database
+  - name: notification_db
+    owner: postgres
+    service: notification-service
+    description: "Database for Notification logs, templates, and delivery status tracking"

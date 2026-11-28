@@ -12,9 +12,19 @@ set "PYTHONPATH=%PROJECT_ROOT%\src;%PROJECT_ROOT%\.venv\Lib\site-packages;%PYTHO
 set "PYTHONIOENCODING=utf-8"
 
 set "PYTHON_EXE=python"
+if defined VIRTUAL_ENV if exist "%VIRTUAL_ENV%\Scripts\python.exe" (
+    set "PYTHON_EXE=%VIRTUAL_ENV%\Scripts\python.exe"
+    goto :run
+)
+if exist "%PROJECT_ROOT%\.venv\Scripts\python.exe" (
+    set "PYTHON_EXE=%PROJECT_ROOT%\.venv\Scripts\python.exe"
+    goto :run
+)
 if exist "%LOCALAPPDATA%\Python\bin\python.exe" (
     set "PYTHON_EXE=%LOCALAPPDATA%\Python\bin\python.exe"
+    goto :run
 )
 
+:run
 "%PYTHON_EXE%" -m compose_pilot %*
 exit /b %ERRORLEVEL%

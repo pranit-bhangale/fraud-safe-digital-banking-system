@@ -17,6 +17,7 @@ from compose_pilot.exceptions import (
     ComposePilotError,
     HealthCheckTimeoutError,
     ProcessCancelledError,
+    ServiceNotFoundError,
 )
 from compose_pilot.ui.console import PilotConsole
 from compose_pilot.ui.dashboard import launch_dashboard
@@ -25,6 +26,7 @@ from compose_pilot.ui.prompts import (
     prompt_clean_confirmation,
     prompt_clean_scope,
     prompt_docker_login,
+    prompt_stop_scope,
 )
 from compose_pilot.ui.tables import (
     render_config_table,
@@ -211,12 +213,12 @@ def print_usage(console: PilotConsole, controller: Optional[LifecycleController]
         console.print("Lifecycle Commands:", markup=False)
 
     commands = [
-        ("start", "Smart start (rebuilds and recreates only services with detected changes)"),
-        ("start --recreate", "Force rebuild and recreate all containers"),
-        ("stop", "Stop and remove containers"),
-        ("stop -v", "Stop containers and remove project persistent volumes"),
-        ("restart [service]", "Restart service(s) (rebuilds automatically if code changed)"),
-        ("recreate [service]", "Force rebuild and recreate service container(s)"),
+        ("start [service]", "Smart start all services or a specific service (with live TUI)"),
+        ("start [service] --recreate", "Force rebuild and recreate all or specific container(s)"),
+        ("stop [service]", "Stop and remove all containers or a specific service"),
+        ("stop [service] -v", "Stop container(s) and remove persistent volume(s)"),
+        ("restart [service]", "Restart all services or a specific service (smart rebuild)"),
+        ("recreate [service]", "Force rebuild and recreate all or specific service container(s)"),
         ("push [service]", "Upload/push built container image(s) to Docker registry"),
         ("upload [service]", "Alias for push"),
         ("login [registry]", "Log in to Docker registry (Docker Hub, GHCR, etc.)"),
@@ -309,67 +311,26 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
     try:
         if command == "start":
-            param1 = extra_args[0] if extra_args else ""
-            force_recreate = param1 in ("--recreate", "-r", "--build")
-            
-            console.major_section(f"🚀 Starting Deployment [{config.project_name}]")
-            controller.check_prerequisites()
-            controller.validate_compose()
+            force_recreate = False
+            target_svc = None
+            for a in extra_args:
+                if a in ("--recreate", "-r", "--build"):
+                    force_recreate = True
+                elif not a.startswith("-") and target_svc is None:
+                    target_svc = a
 
-            console.major_section("🔍 Checking Code Changes & Docker Images")
-            def status_logger(msg: str, level: str):
-                if level == "warning":
-                    console.warning(msg)
-                else:
-                    console.success(msg)
+            if target_svc:
+                all_services = controller.compose.get_services()
+                if target_svc not in all_services:
+                    raise ServiceNotFoundError(target_svc, all_services)
 
-            def spinner_logger(msg: str):
-                if console.color_enabled:
-                    sys.stdout.write(f"\r\033[K{msg}")
-                    sys.stdout.flush()
-
-            controller.check_and_prepare_services(
+            from compose_pilot.ui.interactive_start import run_interactive_deployment
+            return run_interactive_deployment(
+                config,
+                controller,
                 force_recreate=force_recreate,
-                status_logger=status_logger,
-                spinner_callback=spinner_logger,
+                target_services=[target_svc] if target_svc else None,
             )
-            if console.color_enabled:
-                sys.stdout.write("\r\033[K")
-                sys.stdout.flush()
-
-            if config.push:
-                controller.registry.push_all()
-
-            console.major_section("🐳 Starting Services")
-            controller.start_containers()
-            console.success("Containers running in detached mode")
-
-            console.major_section("⏳ Checking Service Health")
-            console.print("Waiting for services to become healthy...")
-
-            def health_spinner(elapsed: int, max_w: int, msg: str):
-                if console.color_enabled:
-                    sys.stdout.write(f"\r\033[K{msg}")
-                    sys.stdout.flush()
-
-            health_map = controller.wait_for_services(progress_callback=health_spinner)
-            if console.color_enabled:
-                sys.stdout.write("\r\033[K")
-                sys.stdout.flush()
-
-            console.major_section("📊 Service Status")
-            render_health_table(console, health_map)
-
-            endpoints = controller.get_endpoints()
-            render_endpoints_table(console, config.project_name, endpoints)
-
-            console.print()
-            console.success(f"{config.project_name} deployment completed successfully.\n")
-            console.tip("Live Logs Tip", f"compose-pilot live-logs [service]")
-            console.tip("Push Tip     ", f"compose-pilot push [service] -r <registry>")
-            console.tip("Recreate Tip ", f"compose-pilot recreate [service]")
-            console.tip("Clean Tip    ", f"compose-pilot clean")
-            return 0
 
         elif command == "stop":
             controller.check_prerequisites(check_daemon=True)
@@ -377,6 +338,28 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             clean_images = any(a in ("-i", "--images", "images", "image", "img") for a in extra_args)
             clean_all = any(a in ("-a", "--all", "all") for a in extra_args)
             force = any(a in ("-f", "--force", "force", "-y", "--yes") for a in extra_args)
+
+            # Check if a specific service was targeted (e.g. `stop kafka`, `stop kafka -v`)
+            target_svc = None
+            non_svc_keywords = {"volumes", "volume", "vol", "images", "image", "img", "all", "force"}
+            for a in extra_args:
+                if not a.startswith("-") and a.lower() not in non_svc_keywords:
+                    target_svc = a
+                    break
+
+            if target_svc:
+                all_services = controller.compose.get_services()
+                if target_svc not in all_services:
+                    raise ServiceNotFoundError(target_svc, all_services)
+
+                console.major_section(f"🛑 Stopping Service: {target_svc}")
+                controller.stop_service(target_svc, remove_volumes=clean_volumes or clean_all)
+                console.print()
+                if clean_volumes or clean_all:
+                    console.success(f"Service '{target_svc}' stopped and volumes removed")
+                else:
+                    console.success(f"Service '{target_svc}' stopped and container removed")
+                return 0
 
             if clean_volumes or clean_images or clean_all:
                 vols = clean_volumes or clean_all
@@ -392,6 +375,29 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     status_callback=lambda m: console.info(m),
                 )
             else:
+                if not force and sys.stdin.isatty():
+                    action = prompt_stop_scope(console, config.project_name)
+                    if action == "cancel":
+                        console.print()
+                        console.warning("Stop operation cancelled.")
+                        return 0
+                    elif action == "volumes":
+                        controller.cleaner.clean(
+                            clean_volumes=True,
+                            clean_images=False,
+                            force=True,
+                            status_callback=lambda m: console.info(m),
+                        )
+                        return 0
+                    elif action == "all":
+                        controller.cleaner.clean(
+                            clean_volumes=True,
+                            clean_images=True,
+                            force=True,
+                            status_callback=lambda m: console.info(m),
+                        )
+                        return 0
+
                 console.major_section(f"🛑 Stopping [{config.project_name}]")
                 controller.stop()
                 console.print()
@@ -400,8 +406,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
         elif command == "restart":
             controller.check_prerequisites()
-            target_svc = extra_args[0] if extra_args else None
+            target_svc = extra_args[0] if extra_args and not extra_args[0].startswith("-") else None
             if target_svc:
+                all_services = controller.compose.get_services()
+                if target_svc not in all_services:
+                    raise ServiceNotFoundError(target_svc, all_services)
                 console.major_section(f"🔄 Restarting Service: {target_svc}")
             else:
                 console.major_section(f"🔄 Restarting [{config.project_name}]")
@@ -412,8 +421,11 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         elif command in ("recreate", "rebuild"):
             controller.check_prerequisites()
             controller.validate_compose()
-            target_svc = extra_args[0] if extra_args else None
+            target_svc = extra_args[0] if extra_args and not extra_args[0].startswith("-") else None
             if target_svc:
+                all_services = controller.compose.get_services()
+                if target_svc not in all_services:
+                    raise ServiceNotFoundError(target_svc, all_services)
                 console.major_section(f"🔄 Recreating Service: {target_svc}")
             else:
                 console.major_section(f"🔄 Recreating [{config.project_name}]")

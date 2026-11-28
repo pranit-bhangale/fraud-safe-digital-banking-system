@@ -97,8 +97,9 @@ def detect_project_name(
     Checks:
     1. CLI argument (-p, --project-name)
     2. COMPOSE_PROJECT_NAME environment variable
-    3. `name:` key inside docker compose config
-    4. Normalized current working directory name
+    3. `name:` key inside compose files
+    4. `name:` key inside docker compose config
+    5. Normalized current working directory name
     """
     if cli_name and cli_name.strip():
         return cli_name.strip()
@@ -106,6 +107,20 @@ def detect_project_name(
     env_name = os.environ.get("COMPOSE_PROJECT_NAME")
     if env_name and env_name.strip():
         return env_name.strip()
+
+    # Direct inspection of compose file header for top-level `name:`
+    if compose_files:
+        for f in compose_files:
+            try:
+                p = Path(f)
+                if p.is_file():
+                    with open(p, "r", encoding="utf-8", errors="ignore") as fp:
+                        for line in fp:
+                            match = re.match(r"^name:\s+['\"]?([a-zA-Z0-9_.-]+)['\"]?", line.strip())
+                            if match:
+                                return match.group(1).strip()
+            except Exception:
+                pass
 
     if compose_cmd_builder:
         try:

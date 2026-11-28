@@ -3,21 +3,8 @@ package com.banking.account.entity;
 import com.banking.account.model.AccountStatus;
 import com.banking.account.model.AccountType;
 import com.banking.utility.audit.Auditable;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
-import jakarta.persistence.Version;
-import lombok.AccessLevel;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import jakarta.persistence.*;
+import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 import java.math.BigDecimal;
@@ -56,11 +43,6 @@ public class Account extends Auditable {
     @Column(nullable = false, precision = 19, scale = 2)
     @Builder.Default
     private BigDecimal reservedBalance = BigDecimal.ZERO;
-
-    @Version
-    @Column(nullable = false)
-    @Builder.Default
-    private Long version = 0L;
 
     public BigDecimal getAvailableBalance() {
         return balance.subtract(reservedBalance);

@@ -36,17 +36,6 @@ public class TransactionGrpcClient {
         this.stub = TransactionServiceGrpc.newBlockingStub(factory.createChannel("transaction-service"));
     }
 
-    private static Timestamp toTimestamp(Instant instant) {
-        return Timestamp.newBuilder()
-                .setSeconds(instant.getEpochSecond())
-                .setNanos(instant.getNano())
-                .build();
-    }
-
-    private static Instant toInstant(Timestamp timestamp) {
-        return Instant.ofEpochSecond(timestamp.getSeconds(), timestamp.getNanos());
-    }
-
     @CircuitBreaker(name = "transactionService", fallbackMethod = "createInitialTransactionFallback")
     @Retry(name = "transactionService")
     @TimeLimiter(name = "transactionService")
@@ -68,6 +57,17 @@ public class TransactionGrpcClient {
                 throw new GrpcException("Failed to create initial transaction" + e);
             }
         });
+    }
+
+    private static Timestamp toTimestamp(Instant instant) {
+        return Timestamp.newBuilder()
+                .setSeconds(instant.getEpochSecond())
+                .setNanos(instant.getNano())
+                .build();
+    }
+
+    private TransactionServiceGrpc.TransactionServiceBlockingStub stubWithDeadline() {
+        return stub.withDeadlineAfter(TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
 
     @CircuitBreaker(name = "transactionService", fallbackMethod = "getTransactionHistoryFallback")
@@ -105,6 +105,22 @@ public class TransactionGrpcClient {
         });
     }
 
+    private AccountDetail.TransactionHistory toHistory(TransactionInformation t) {
+        return AccountDetail.TransactionHistory.builder()
+                .transactionId(UUID.fromString(t.getTransactionId()))
+                .referenceNo(t.getReferenceNo())
+                .type(t.getType())
+                .amount(new BigDecimal(t.getAmount()))
+                .balanceAfter(new BigDecimal(t.getBalanceAfter()))
+                .description(t.getDescription())
+                .transactionDate(toInstant(t.getTransactionDate()))
+                .build();
+    }
+
+    private static Instant toInstant(Timestamp timestamp) {
+        return Instant.ofEpochSecond(timestamp.getSeconds(), timestamp.getNanos());
+    }
+
     private CompletableFuture<CreateInitialTransactionResponse> createInitialTransactionFallback(Account account, Exception ex) {
         log.warn("Circuit breaker fallback for createInitialTransaction: accountNo={}, error={}", account.getAccountNo(), ex.getMessage());
         return CompletableFuture.completedFuture(
@@ -120,21 +136,5 @@ public class TransactionGrpcClient {
         return CompletableFuture.completedFuture(
                 AccountDetail.PaginatedTransactionHistory.empty(page, size)
         );
-    }
-
-    private AccountDetail.TransactionHistory toHistory(TransactionInformation t) {
-        return AccountDetail.TransactionHistory.builder()
-                .transactionId(UUID.fromString(t.getTransactionId()))
-                .referenceNo(t.getReferenceNo())
-                .type(t.getType())
-                .amount(new BigDecimal(t.getAmount()))
-                .balanceAfter(new BigDecimal(t.getBalanceAfter()))
-                .description(t.getDescription())
-                .transactionDate(toInstant(t.getTransactionDate()))
-                .build();
-    }
-
-    private TransactionServiceGrpc.TransactionServiceBlockingStub stubWithDeadline() {
-        return stub.withDeadlineAfter(TIMEOUT_SECONDS, TimeUnit.SECONDS);
     }
 }

@@ -70,10 +70,10 @@ public class TransactionServiceImpl implements TransactionService {
         log.info("Transaction initiated: referenceNo: {} sender: {} amount: {}",
                 saved.getReferenceNo(), saved.getAccountNo(), saved.getAmount());
 
-        // Start saga orchestration (reserves balance, submits to fraud)
+        // Start saga orchestration: Fraud evaluation runs first before any balance operations
         this.sagaOrchestrator.startSaga(saved);
 
-        return mapToResponse(saved, "Transaction initiated, balance reserved, fraud check in progress");
+        return mapToResponse(saved, "Transaction initiated, evaluating fraud risk prior to account debit");
     }
 
     @Override

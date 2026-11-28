@@ -1,0 +1,13 @@
+---
+# Defaults for database_provisioning role
+# Pure Local / Host-Native Execution (Zero Docker)
+database_provisioning:
+  enabled: true
+  config_file: "{{ playbook_dir }}/databases.yml"
+  host: "{{ global_env.DB_HOST | default('127.0.0.1') }}"
+  port: "{{ global_env.DB_PORT | default(5434) }}"
+  username: "{{ global_env.DB_USERNAME | default('postgres') }}"
+  password: "{{ global_env.DB_PASSWORD | default('postgres') }}"
+  default_db: "postgres"
+  psql_binary: "psql"
+  databases: [ ]

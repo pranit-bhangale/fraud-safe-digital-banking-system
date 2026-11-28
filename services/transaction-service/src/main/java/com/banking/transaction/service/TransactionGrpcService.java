@@ -1,12 +1,7 @@
 package com.banking.transaction.service;
 
 import com.banking.transaction.entity.Transaction;
-import com.banking.transaction.grpc.CreateInitialTransactionRequest;
-import com.banking.transaction.grpc.CreateInitialTransactionResponse;
-import com.banking.transaction.grpc.GetUserTransactionHistoryRequest;
-import com.banking.transaction.grpc.GetUserTransactionHistoryResponse;
-import com.banking.transaction.grpc.TransactionInformation;
-import com.banking.transaction.grpc.TransactionServiceGrpc;
+import com.banking.transaction.grpc.*;
 import com.banking.transaction.model.TransactionType;
 import com.banking.transaction.repository.TransactionRepository;
 import com.google.protobuf.Timestamp;
@@ -127,7 +122,7 @@ public class TransactionGrpcService extends TransactionServiceGrpc.TransactionSe
             String accountType, BigDecimal balance,
             String description, Instant date
     ) {
-        return repository.findFirstByAccountIdAndType(accountId, TYPE_OPENING)
+        return repository.findFirstByAccountNoAndType(accountNo, TYPE_OPENING)
                 .orElseGet(() -> repository.save(Transaction.builder()
                         .userId(userId)
                         .accountNo(accountNo)

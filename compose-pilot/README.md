@@ -197,10 +197,43 @@ Usage: compose-pilot [OPTIONS] [COMMAND] [ARGS...]
 
 ### Command Guide & Examples
 
-#### `start` (Smart Deployment)
-Inspects source code and configuration hashes. Rebuilds only modified services, starts containers, polls health with animated spinners, and displays clickable endpoint URLs.
+#### `start` (Interactive Live Deployment)
+Launches an **interactive, real-time Terminal UI (TUI)** that visually tracks every phase of your deployment:
+- **Phase & Progress Bar**: Real-time completion percentage, active deployment stage, and elapsed time.
+- **Live Service Status Grid**: Per-service states (Building, Starting, Health Checking, Healthy) with animated spinners.
+- **Live Activity Feed**: Rolling timestamped events showing builds, launches, and individual health check transitions.
+- **Interactive Controls**: Press `[q]` to abort/cancel at any moment.
+
+```text
+╭─ 🚀 COMPOSE-PILOT LIVE DEPLOYMENT [digital-bank-system] ──────────────────────────╮
+│ Compose: docker-compose.yaml  |  Profiles: default  |  Time: 2026-11-27 23:25:10    │
+╰───────────────────────────────────────────────────────────────────────────────────╯
+╭─ Deployment Progress ─────────────────────────────────────────────────────────────╮
+│  Phase [4/4]: Monitoring Service Health & Readiness  ⠋                            │
+│  [━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━╸━━━━]  85% Complete (4/5 Services Healthy) │
+╰───────────────────────────────────────────────────────────────────────────────────╯
+┏━━━━━━┳━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━━━┳━━━━━━━━━━━━━━┳━━━━━
+┃Status┃ Service          ┃ Phase / Current State   ┃ Progress   ┃ Container ID ┃ ... 
+┡━━━━━━╇━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━━━╇━━━━━━━━━━━━━━╇━━━━━
+│  🟢  │ postgres         │ Healthy (healthy)       │ 100%       │ c8a71b2d01e4 │ ... 
+│  🟢  │ redis            │ Healthy (healthy)       │ 100%       │ b91e0a24f611 │ ... 
+│  🟢  │ rabbitmq         │ Healthy (healthy)       │ 100%       │ d481c9a17382 │ ... 
+│  🟡  │ kafka            │ Starting (12s)...       │ 85%        │ a11e89b21f90 │ ... 
+│  🟢  │ kafka-ui         │ Healthy (healthy)       │ 100%       │ e5710bc821a0 │ ... 
+└──────┴──────────────────┴─────────────────────────┴────────────┴──────────────┴─────
+╭─ 📜 Live Activity Feed ───────────────────────────────────────────────────────────╮
+│ [23:25:01] Validated Compose syntax and Docker daemon reachability                │
+│ [23:25:04] ✓ All containers launched in detached mode                             │
+│ [23:25:06] ✓ postgres is HEALTHY and ready                                        │
+│ [23:25:08] ✓ redis is HEALTHY and ready                                           │
+│ [23:25:11] ✓ rabbitmq is HEALTHY and ready                                        │
+│ [23:25:14] ⏳ kafka: polling Kraft broker listener on port 29092...                │
+╰───────────────────────────────────────────────────────────────────────────────────╯
+Hotkeys: [q] Abort Deployment
+```
+
 ```powershell
-# Smart deployment
+# Interactive smart deployment
 compose-pilot start
 
 # Force rebuild and recreation of all containers

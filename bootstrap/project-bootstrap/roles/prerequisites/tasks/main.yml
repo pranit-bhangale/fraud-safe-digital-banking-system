@@ -1,0 +1,24 @@
+---
+- name: Run tool checks
+  ansible.builtin.shell:
+    cmd: "{{ item.check | default(item.name ~ ' --version') }}"
+    executable: /bin/bash
+  loop: "{{ required_tools }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: tool_checks
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Fail with a clear message if anything is missing
+  ansible.builtin.assert:
+    that: item.rc == 0
+    quiet: true
+    fail_msg: >-
+      Required tool '{{ item.item.name }}' is missing or not working
+      (check: {{ item.item.check | default(item.item.name ~ ' --version') }}).
+      {{ item.item.hint | default('') }}
+  loop: "{{ tool_checks.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"

@@ -1,0 +1,27 @@
+---
+# The password lookup creates <secrets_dir>/<name> on first use and re-reads it afterwards,
+# so secrets stay identical across runs (idempotent) without being stored in project.yml.
+- name: Generate or reuse secrets
+  ansible.builtin.set_fact:
+    secrets_map: >-
+      {{ secrets_map | default({}) | combine({
+           item.name: lookup('ansible.builtin.password',
+             secrets_dir ~ '/' ~ item.name
+             ~ ' length=' ~ (item.length | default(24) | string)
+             ~ ' chars=ascii_letters,digits')
+         }) }}
+  loop: "{{ secrets }}"
+  loop_control:
+    label: "{{ item.name }}"
+  no_log: true
+
+- name: Write .env files (kept as-is on re-run unless overwrite is true)
+  ansible.builtin.copy:
+    dest: "{{ item.dest }}"
+    content: "# Managed by project-bootstrap\n{% for k, v in item.vars.items() %}{{ k }}={{ v }}\n{% endfor %}"
+    mode: "{{ item.mode | default('0600') }}"
+    force: "{{ item.overwrite | default(false) }}"
+  loop: "{{ env_files }}"
+  loop_control:
+    label: "{{ item.dest }}"
+  no_log: true

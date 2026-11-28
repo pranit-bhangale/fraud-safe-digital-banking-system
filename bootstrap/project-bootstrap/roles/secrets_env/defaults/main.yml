@@ -1,0 +1,4 @@
+---
+secrets: []
+env_files: []
+secrets_dir: "{{ playbook_dir }}/.secrets"

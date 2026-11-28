@@ -15,9 +15,12 @@ $env:PYTHONPATH = "$ProjectRoot\src;$ProjectRoot\.venv\Lib\site-packages;$env:PY
 $env:PYTHONIOENCODING = "utf-8"
 
 $PythonExe = "python"
-$candidate = "$env:LOCALAPPDATA\Python\bin\python.exe"
-if (Test-Path $candidate -ErrorAction SilentlyContinue) {
-    $PythonExe = $candidate
+if ($env:VIRTUAL_ENV -and (Test-Path "$env:VIRTUAL_ENV\Scripts\python.exe")) {
+    $PythonExe = "$env:VIRTUAL_ENV\Scripts\python.exe"
+} elseif (Test-Path "$ProjectRoot\.venv\Scripts\python.exe" -ErrorAction SilentlyContinue) {
+    $PythonExe = "$ProjectRoot\.venv\Scripts\python.exe"
+} elseif (Test-Path "$env:LOCALAPPDATA\Python\bin\python.exe" -ErrorAction SilentlyContinue) {
+    $PythonExe = "$env:LOCALAPPDATA\Python\bin\python.exe"
 } else {
     $cmd = Get-Command python -ErrorAction SilentlyContinue
     if ($cmd) {

@@ -8,7 +8,8 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
 import java.util.Collection;
-import java.util.List;
+import java.util.Collections;
+import java.util.Set;
 import java.util.UUID;
 
 @Builder
@@ -16,12 +17,25 @@ public record UserDetail(
         UUID id,
         String username,
         String password,
-        String email
+        String email,
+        Set<String> roles
 ) implements UserDetails {
+
+    public UserDetail {
+        if (roles == null) {
+            roles = Collections.emptySet();
+        }
+    }
 
     @Override
     public @NullMarked Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority("ROLE_USER"));
+        if (roles == null || roles.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return roles.stream()
+                .map(role -> role.startsWith("ROLE_") ? role : "ROLE_" + role)
+                .map(SimpleGrantedAuthority::new)
+                .toList();
     }
 
     @Override

@@ -1,0 +1,110 @@
+name: digital-bank-messaging
+
+# ---- Shared definitions (declared once, reused below) ----
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: ${LOG_MAX_SIZE:-10m}
+    max-file: ${LOG_MAX_FILE:-3}
+
+x-service-defaults: &service-defaults
+  restart: ${RESTART_POLICY:-unless-stopped}
+  networks: [ bank ]
+  logging: *default-logging
+
+services:
+  redis:
+    <<: *service-defaults
+    image: redis:${REDIS_VERSION:-8-alpine}
+    container_name: redis
+    command: [ "sh", "-c", 'exec redis-server --appendonly yes --requirepass "$$REDISCLI_AUTH"' ]
+    environment:
+      REDISCLI_AUTH: ${REDIS_PASSWORD:-postgres}
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 5s
+
+  rabbitmq:
+    <<: *service-defaults
+    image: rabbitmq:${RABBITMQ_VERSION:-4-management-alpine}
+    container_name: rabbitmq
+    hostname: rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-guest}
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${RABBITMQ_PORT:-5672}:5672"
+      - "${BIND_ADDRESS:-127.0.0.1}:${RABBITMQ_MANAGEMENT_PORT:-15672}:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: [ "CMD", "rabbitmq-diagnostics", "-q", "ping" ]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 15s
+
+  kafka:
+    <<: *service-defaults
+    image: apache/kafka:${KAFKA_VERSION:-latest}
+    container_name: kafka
+    hostname: kafka
+    ports:
+      # Host apps (Spring Boot on your machine) connect to localhost:29092
+      - "${BIND_ADDRESS:-127.0.0.1}:${KAFKA_PORT:-29092}:29092"
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    environment:
+      CLUSTER_ID: MkU3BEVONTcMEENTJE2Qk
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      # FIX: CONTROLLER://9093 -> CONTROLLER://:9093 (missing colon was the crash)
+      KAFKA_LISTENERS: PLAINTEXT://:9092,PLAINTEXT_HOST://:29092,CONTROLLER://:9093
+      # Containers on the "bank" network use kafka:9092, host apps use localhost:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:${KAFKA_PORT:-29092}
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      # Single-node settings (defaults assume 3 brokers and would hang transactions/consumer groups)
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    healthcheck:
+      test: [ "CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 > /dev/null 2>&1" ]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 20s
+
+  kafka-ui:
+    <<: *service-defaults
+    image: provectuslabs/kafka-ui:${KAFKA_UI_VERSION:-latest}
+    container_name: kafka-ui
+    depends_on:
+      kafka:
+        condition: service_healthy
+    ports:
+      - "${BIND_ADDRESS:-127.0.0.1}:${KAFKA_UI_PORT:-7575}:8080"
+    environment:
+      KAFKA_CLUSTERS_0_NAME: bank-kafka
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9092
+      DYNAMIC_CONFIG_ENABLED: "true"
+
+networks:
+  bank:
+    name: bank
+
+volumes:
+  redis_data:
+  rabbitmq_data:
+  kafka_data:
